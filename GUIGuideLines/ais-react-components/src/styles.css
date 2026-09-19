@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* AIS Root Styles */
+.ais-root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure text selection works for copyable content */
+.select-all {
+  user-select: all;
+  cursor: text;
+}
+
+/* Focus visible styles */
+.ais-root *:focus-visible {
+  outline: 2px solid var(--ais-action-primary);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+.ais-root * {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Animation keyframes */
+@keyframes ais-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: ais-spin 1s linear infinite;
+}
+
+@keyframes ais-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: ais-fade-in 0.2s ease-out;
+}
+
+@keyframes ais-slide-in-from-top {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-from-top {
+  animation: ais-slide-in-from-top 0.3s ease-out;
+}
