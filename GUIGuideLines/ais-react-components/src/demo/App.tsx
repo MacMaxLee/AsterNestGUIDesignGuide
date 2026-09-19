@@ -5,6 +5,8 @@ import { StateBadgeDemo } from './demos/StateBadgeDemo';
 import { ValueComponentDemo } from './demos/ValueComponentDemo';
 import { ErrorHandlingDemo } from './demos/ErrorHandlingDemo';
 import { DataGridDemo } from './demos/DataGridDemo';
+import MediaPickerDemo from './demos/MediaPickerDemo';
+import GridLayoutDemo from './demos/GridLayoutDemo';
 import {
   Palette,
   BadgeCheck,
@@ -13,6 +15,8 @@ import {
   Table,
   Moon,
   Sun,
+  Upload,
+  LayoutGrid,
 } from 'lucide-react';
 
 type DemoSection =
@@ -20,7 +24,9 @@ type DemoSection =
   | 'badges'
   | 'values'
   | 'errors'
-  | 'grid';
+  | 'grid'
+  | 'media'
+  | 'layout';
 
 interface NavItemProps {
   id: DemoSection;
@@ -59,6 +65,8 @@ export function App() {
     { id: 'values', label: 'Value Components', icon: <Hash size={20} /> },
     { id: 'errors', label: 'Error Handling', icon: <AlertCircle size={20} /> },
     { id: 'grid', label: 'Data Grid', icon: <Table size={20} /> },
+    { id: 'media', label: 'Media Picker', icon: <Upload size={20} /> },
+    { id: 'layout', label: 'Grid Layout', icon: <LayoutGrid size={20} /> },
   ];
 
   const renderContent = () => {
@@ -73,6 +81,10 @@ export function App() {
         return <ErrorHandlingDemo />;
       case 'grid':
         return <DataGridDemo />;
+      case 'media':
+        return <MediaPickerDemo />;
+      case 'layout':
+        return <GridLayoutDemo />;
       default:
         return <ButtonDemo />;
     }

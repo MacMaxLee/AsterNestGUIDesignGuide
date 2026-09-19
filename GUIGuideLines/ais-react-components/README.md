@@ -263,6 +263,74 @@ function MyComponent() {
 </AISProvider>
 ```
 
+### AISMediaPicker
+
+File selection with metadata extraction for database storage.
+
+```tsx
+// Basic usage
+<AISMediaPicker
+  label="Attach Files"
+  onFilesSelected={(files) => console.log(files)}
+/>
+
+// With constraints
+<AISMediaPicker
+  allowedTypes={['image', 'pdf']}
+  maxSizeBytes={5 * 1024 * 1024}  // 5MB
+  multiple={true}
+  maxFiles={5}
+  computeChecksums={true}
+  onFilesSelected={handleFiles}
+/>
+
+// File chips for inline display
+<AISFileChip
+  file={fileInfo}
+  onClick={() => showDetails(fileInfo)}
+  onRemove={() => removeFile(fileInfo)}
+/>
+
+// Full file info display
+<AISFileInfoDisplay file={fileInfo} showMetadata={true} />
+```
+
+### AISGridLayout
+
+Responsive grid layouts for arranging items.
+
+```tsx
+// Fixed column grid
+<AISGridLayout columns={3} gap={16}>
+  <Card>Item 1</Card>
+  <Card>Item 2</Card>
+  <Card>Item 3</Card>
+</AISGridLayout>
+
+// Adaptive grid (adjusts to container)
+<AISAdaptiveGridLayout minChildWidth={200} maxColumns={6}>
+  {items.map(item => <Card key={item.id}>{item.name}</Card>)}
+</AISAdaptiveGridLayout>
+
+// CSS-only auto grid
+<AISAutoGrid minWidth="250px" gap={16}>
+  <Card>Item 1</Card>
+  <Card>Item 2</Card>
+</AISAutoGrid>
+
+// Masonry layout (Pinterest-style)
+<AISMasonryLayout columns={4} gap={16}>
+  <Card style={{ height: 200 }}>Item 1</Card>
+  <Card style={{ height: 150 }}>Item 2</Card>
+</AISMasonryLayout>
+
+// Grid items with span
+<AISGridLayout columns={4}>
+  <AISGridItem colSpan={2}><Card>Wide</Card></AISGridItem>
+  <AISGridItem rowSpan={2}><Card>Tall</Card></AISGridItem>
+</AISGridLayout>
+```
+
 ## Conformance Requirements
 
 | Code | Requirement | Component |
