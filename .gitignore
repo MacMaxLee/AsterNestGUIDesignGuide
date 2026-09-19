@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Xcode
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Flutter
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# iOS
+Pods/
+.symlinks/
+Flutter/Flutter.framework
+Flutter/Flutter.podspec
+Runner.xcworkspace/
+
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+*.jks
+
+# IDE
+.vscode/
+*.code-workspace
+
+# Misc
+*.log
