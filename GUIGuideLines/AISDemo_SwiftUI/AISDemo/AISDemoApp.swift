@@ -52,7 +52,6 @@ struct AISDemoApp: App {
         #if os(macOS)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
-        .defaultSize(width: 1200, height: 800)
         #endif
 
         #if os(macOS)
