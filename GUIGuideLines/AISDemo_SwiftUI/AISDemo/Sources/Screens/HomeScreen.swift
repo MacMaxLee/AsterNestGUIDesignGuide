@@ -18,6 +18,7 @@ enum DemoCategory: String, CaseIterable, Identifiable {
     case buttons = "Buttons"
     case values = "Value Components"
     case dataGrid = "Data Grid"
+    case gridLayout = "Grid Layout"
     case mediaPicker = "Media Picker"
     case errorHandling = "Error Handling"
     case stateBadges = "State Badges"
@@ -31,6 +32,7 @@ enum DemoCategory: String, CaseIterable, Identifiable {
         case .buttons: return "hand.tap"
         case .values: return "number"
         case .dataGrid: return "tablecells"
+        case .gridLayout: return "square.grid.3x3"
         case .mediaPicker: return "photo.on.rectangle"
         case .errorHandling: return "exclamationmark.triangle"
         case .stateBadges: return "flag"
@@ -47,6 +49,8 @@ enum DemoCategory: String, CaseIterable, Identifiable {
             return "Numeric display with required annotations (C-04)"
         case .dataGrid:
             return "Excel-like grid with sorting and filtering (C-35, C-36)"
+        case .gridLayout:
+            return "Responsive grid layouts: fixed, adaptive, masonry"
         case .mediaPicker:
             return "File selection with metadata extraction"
         case .errorHandling:
@@ -68,6 +72,8 @@ enum DemoCategory: String, CaseIterable, Identifiable {
             ValueComponentDemoScreen()
         case .dataGrid:
             DataGridDemoScreen()
+        case .gridLayout:
+            GridLayoutDemoScreen()
         case .mediaPicker:
             MediaPickerDemoScreen()
         case .errorHandling:
