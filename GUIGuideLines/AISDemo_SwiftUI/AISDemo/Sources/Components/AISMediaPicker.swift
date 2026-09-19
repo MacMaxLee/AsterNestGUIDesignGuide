@@ -35,6 +35,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import CryptoKit
+#if os(macOS)
+import AppKit
+#endif
 
 // MARK: - File Info Protocol
 
@@ -381,6 +384,14 @@ public struct AISMediaPicker: View {
             // State indicator
             stateIndicator
         }
+        #if os(iOS)
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: allowedTypes.map(\.utType),
+            allowsMultipleSelection: allowsMultiple,
+            onCompletion: handleFileSelection
+        )
+        #endif
     }
 
     // MARK: - Picker Button
@@ -407,15 +418,45 @@ public struct AISMediaPicker: View {
                 icon: iconForTypes,
                 isLoading: isPickerShowing
             ) {
-                showFilePicker = true
+                openFilePicker()
             }
-            .fileImporter(
-                isPresented: $showFilePicker,
-                allowedContentTypes: allowedTypes.map(\.utType),
-                allowsMultipleSelection: allowsMultiple,
-                onCompletion: handleFileSelection
-            )
         }
+    }
+
+    // MARK: - Native File Picker
+
+    /// Opens native file picker with proper Cancel button support
+    private func openFilePicker() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = allowsMultiple
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = allowedTypes.map(\.utType)
+        panel.message = "Select files to attach"
+        panel.prompt = "Select"
+
+        // Show the panel
+        panel.begin { response in
+            if response == .OK {
+                let urls = panel.urls
+                if urls.isEmpty {
+                    self.state = .error(.cancelled)
+                    self.onError?(.cancelled)
+                } else {
+                    Task {
+                        await self.processFiles(urls)
+                    }
+                }
+            } else {
+                // User clicked Cancel
+                self.state = .idle
+            }
+        }
+        #else
+        // On iOS, use the fileImporter modifier approach
+        showFilePicker = true
+        #endif
     }
 
     /// Returns appropriate icon based on allowed types
