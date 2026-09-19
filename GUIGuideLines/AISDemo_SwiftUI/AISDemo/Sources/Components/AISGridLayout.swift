@@ -40,8 +40,8 @@ public struct AISGridLayout<Content: View>: View {
     /// Spacing between items
     let spacing: CGFloat
 
-    /// Horizontal alignment within columns
-    let alignment: HorizontalAlignment
+    /// Alignment within columns
+    let alignment: Alignment
 
     /// The content to display in the grid
     let content: Content
@@ -53,13 +53,13 @@ public struct AISGridLayout<Content: View>: View {
     /// - Parameters:
     ///   - columns: Number of columns (default: 3)
     ///   - spacing: Spacing between items (default: AISSpacing.md)
-    ///   - alignment: Horizontal alignment (default: .center)
+    ///   - alignment: Alignment within columns (default: .center)
     ///   - content: A view builder for the grid content
     ///
     public init(
         columns: Int = 3,
         spacing: CGFloat = AISSpacing.md,
-        alignment: HorizontalAlignment = .center,
+        alignment: Alignment = .center,
         @ViewBuilder content: () -> Content
     ) {
         self.columns = max(1, columns)

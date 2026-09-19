@@ -84,7 +84,7 @@ struct GridLayoutDemoScreen: View {
                     Button(action: { selectedColumns = count }) {
                         Text("\(count)")
                             .font(.body.weight(.medium))
-                            .foregroundColor(selectedColumns == count ? tokens.actionPrimary.onColor : tokens.onSurface)
+                            .foregroundColor(selectedColumns == count ? .white : tokens.onSurface)
                             .padding(.horizontal, AISSpacing.md)
                             .padding(.vertical, AISSpacing.sm)
                             .background(

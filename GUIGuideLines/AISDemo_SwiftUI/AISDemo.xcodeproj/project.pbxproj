@@ -23,6 +23,8 @@
 		A100001B232F0001 /* MediaPickerDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001C232F0001 /* MediaPickerDemoScreen.swift */; };
 		A100001D232F0001 /* ErrorHandlingDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001E232F0001 /* ErrorHandlingDemoScreen.swift */; };
 		A100001F232F0001 /* StateBadgeDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000020232F0001 /* StateBadgeDemoScreen.swift */; };
+		A1000021232F0002 /* AISGridLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022232F0002 /* AISGridLayout.swift */; };
+		A1000023232F0002 /* GridLayoutDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000024232F0002 /* GridLayoutDemoScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +45,8 @@
 		A100001C232F0001 /* MediaPickerDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPickerDemoScreen.swift; sourceTree = "<group>"; };
 		A100001E232F0001 /* ErrorHandlingDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorHandlingDemoScreen.swift; sourceTree = "<group>"; };
 		A1000020232F0001 /* StateBadgeDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateBadgeDemoScreen.swift; sourceTree = "<group>"; };
+		A1000022232F0002 /* AISGridLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISGridLayout.swift; sourceTree = "<group>"; };
+		A1000024232F0002 /* GridLayoutDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridLayoutDemoScreen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +93,7 @@
 				A1000006232F0001 /* AISButton.swift */,
 				A1000008232F0001 /* AISDataGrid.swift */,
 				A100000A232F0001 /* AISErrorEnvelope.swift */,
+				A1000022232F0002 /* AISGridLayout.swift */,
 				A100000C232F0001 /* AISListDetailShell.swift */,
 				A100000E232F0001 /* AISMediaPicker.swift */,
 				A1000010232F0001 /* AISStateBadge.swift */,
@@ -104,6 +109,7 @@
 				A1000016232F0001 /* ButtonDemoScreen.swift */,
 				A1000018232F0001 /* ValueComponentDemoScreen.swift */,
 				A100001A232F0001 /* DataGridDemoScreen.swift */,
+				A1000024232F0002 /* GridLayoutDemoScreen.swift */,
 				A100001C232F0001 /* MediaPickerDemoScreen.swift */,
 				A100001E232F0001 /* ErrorHandlingDemoScreen.swift */,
 				A1000020232F0001 /* StateBadgeDemoScreen.swift */,
@@ -211,6 +217,8 @@
 				A100001B232F0001 /* MediaPickerDemoScreen.swift in Sources */,
 				A100001D232F0001 /* ErrorHandlingDemoScreen.swift in Sources */,
 				A100001F232F0001 /* StateBadgeDemoScreen.swift in Sources */,
+				A1000021232F0002 /* AISGridLayout.swift in Sources */,
+				A1000023232F0002 /* GridLayoutDemoScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
