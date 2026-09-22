@@ -32,20 +32,31 @@ class _DataGridDemoScreenState extends State<DataGridDemoScreen>
   }
 
   List<_SampleProduct> _generateSampleProducts() {
-    return [
-      _SampleProduct(id: 1, name: 'Widget Pro', category: 'Electronics', price: 299.99, stock: 150, active: true),
-      _SampleProduct(id: 2, name: 'Gadget Plus', category: 'Electronics', price: 149.50, stock: 75, active: true),
-      _SampleProduct(id: 3, name: 'Smart Device', category: 'Electronics', price: 499.00, stock: 30, active: false),
-      _SampleProduct(id: 4, name: 'Office Chair', category: 'Furniture', price: 250.00, stock: 45, active: true),
-      _SampleProduct(id: 5, name: 'Standing Desk', category: 'Furniture', price: 599.99, stock: 20, active: true),
-      _SampleProduct(id: 6, name: 'Monitor Stand', category: 'Accessories', price: 79.99, stock: 200, active: true),
-      _SampleProduct(id: 7, name: 'Keyboard Wireless', category: 'Electronics', price: 89.99, stock: 120, active: true),
-      _SampleProduct(id: 8, name: 'Mouse Ergonomic', category: 'Electronics', price: 59.99, stock: 180, active: true),
-      _SampleProduct(id: 9, name: 'Desk Lamp', category: 'Accessories', price: 45.00, stock: 90, active: false),
-      _SampleProduct(id: 10, name: 'Cable Organizer', category: 'Accessories', price: 15.99, stock: 500, active: true),
-      _SampleProduct(id: 11, name: 'Webcam HD', category: 'Electronics', price: 129.00, stock: 60, active: true),
-      _SampleProduct(id: 12, name: 'USB Hub', category: 'Accessories', price: 39.99, stock: 250, active: true),
+    // Generate 50 sample products to demonstrate paging
+    final categories = ['Electronics', 'Furniture', 'Accessories', 'Office Supplies', 'Software'];
+    final productNames = [
+      'Widget Pro', 'Gadget Plus', 'Smart Device', 'Office Chair', 'Standing Desk',
+      'Monitor Stand', 'Keyboard Wireless', 'Mouse Ergonomic', 'Desk Lamp', 'Cable Organizer',
+      'Webcam HD', 'USB Hub', 'Headphones Premium', 'Laptop Stand', 'Desk Mat',
+      'Phone Charger', 'Power Strip', 'File Cabinet', 'Bookshelf', 'Whiteboard',
+      'Projector Mini', 'Speaker Bluetooth', 'Tablet Holder', 'Pen Set', 'Notebook Pack',
+      'Printer Laser', 'Scanner Portable', 'External SSD', 'Router WiFi', 'Switch Network',
+      'Monitor 27"', 'Monitor 32"', 'Docking Station', 'Graphics Card', 'RAM Module',
+      'CPU Cooler', 'Power Supply', 'Computer Case', 'Keyboard Mechanical', 'Mouse Gaming',
+      'Desk Organizer', 'Paper Tray', 'Stapler Heavy', 'Hole Puncher', 'Scissors Set',
+      'Tape Dispenser', 'Clipboard Pack', 'Binder Set', 'Folder Pack', 'Label Maker',
     ];
+
+    return List.generate(50, (i) {
+      return _SampleProduct(
+        id: i + 1,
+        name: productNames[i % productNames.length],
+        category: categories[i % categories.length],
+        price: 15.99 + (i * 7.5) % 500,
+        stock: 10 + (i * 17) % 500,
+        active: i % 3 != 0,
+      );
+    });
   }
 
   @override
@@ -116,6 +127,7 @@ class _DataGridDemoScreenState extends State<DataGridDemoScreen>
                     _FeatureChip('Keyboard navigation'),
                     _FeatureChip('Column resize'),
                     _FeatureChip('Row numbers'),
+                    _FeatureChip('Pagination'),
                     _FeatureChip('Virtualized'),
                   ],
                 ),
@@ -179,6 +191,8 @@ class _DataGridDemoScreenState extends State<DataGridDemoScreen>
               ],
               rows: _products,
               multiSelect: true,
+              pageable: true,
+              defaultPageSize: 10,
               onCellChanged: (row, columnId, newValue) {
                 setState(() {
                   final index = _products.indexOf(row);

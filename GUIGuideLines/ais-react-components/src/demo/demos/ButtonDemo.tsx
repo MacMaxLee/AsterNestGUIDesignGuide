@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { AISButton, AISIconButton } from '../../components/AISButton';
 import { useAISTokens } from '../../core/AISProvider';
 import { Plus, Settings, Save, Trash2 } from 'lucide-react';

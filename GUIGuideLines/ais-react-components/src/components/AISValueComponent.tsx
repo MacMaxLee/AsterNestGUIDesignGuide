@@ -358,7 +358,7 @@ export interface AISValueInputProps {
 export function AISValueInput({
   value,
   onChange,
-  format,
+  format: _format,
   annotations,
   label,
   placeholder = 'Enter value',
@@ -366,6 +366,8 @@ export function AISValueInput({
   disabled = false,
   className,
 }: AISValueInputProps) {
+  // Note: _format would be used for displaying formatted values
+  void _format;
   const tokens = useAISTokens();
   const [inputValue, setInputValue] = React.useState(value?.toString() ?? '');
   const [error, setError] = React.useState<string | null>(null);

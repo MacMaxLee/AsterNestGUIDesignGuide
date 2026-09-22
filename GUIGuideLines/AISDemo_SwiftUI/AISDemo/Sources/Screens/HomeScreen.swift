@@ -20,6 +20,8 @@ enum DemoCategory: String, CaseIterable, Identifiable {
     case dataGrid = "Data Grid"
     case gridLayout = "Grid Layout"
     case mediaPicker = "Media Picker"
+    case docScan = "Document Scan"
+    case aiSettings = "AI Settings"
     case errorHandling = "Error Handling"
     case stateBadges = "State Badges"
     case listDetail = "List-Detail Shell"
@@ -34,6 +36,8 @@ enum DemoCategory: String, CaseIterable, Identifiable {
         case .dataGrid: return "tablecells"
         case .gridLayout: return "square.grid.3x3"
         case .mediaPicker: return "photo.on.rectangle"
+        case .docScan: return "doc.text.magnifyingglass"
+        case .aiSettings: return "brain.head.profile"
         case .errorHandling: return "exclamationmark.triangle"
         case .stateBadges: return "flag"
         case .listDetail: return "rectangle.split.2x1"
@@ -53,6 +57,10 @@ enum DemoCategory: String, CaseIterable, Identifiable {
             return "Responsive grid layouts: fixed, adaptive, masonry"
         case .mediaPicker:
             return "File selection with metadata extraction"
+        case .docScan:
+            return "AI-powered document scanning with OCR extraction"
+        case .aiSettings:
+            return "Configure AI provider API keys and settings"
         case .errorHandling:
             return "Error envelopes, banners, and inline errors"
         case .stateBadges:
@@ -76,6 +84,10 @@ enum DemoCategory: String, CaseIterable, Identifiable {
             GridLayoutDemoScreen()
         case .mediaPicker:
             MediaPickerDemoScreen()
+        case .docScan:
+            DocScanDemoScreen()
+        case .aiSettings:
+            AISettingsDemoScreen()
         case .errorHandling:
             ErrorHandlingDemoScreen()
         case .stateBadges:
@@ -269,10 +281,10 @@ struct HomeScreen: View {
     }
 }
 
-// MARK: - List-Detail Demo Screen
+// MARK: - List-Detail Demo Screen (Legacy - use ListDetailDemoScreen.swift instead)
 
-/// Demonstrates the AISListDetailShell component with sample data.
-struct ListDetailDemoScreen: View {
+/// Legacy demo screen - replaced by dedicated ListDetailDemoScreen.swift
+private struct HomeScreen_ListDetailDemoView: View {
     // MARK: - Sample Data
 
     struct SampleItem: Identifiable, Hashable {
@@ -435,6 +447,373 @@ struct ListDetailDemoScreen: View {
     }
 }
 
+// MARK: - DocScan Demo Screen (Legacy - use DocScanDemoScreen.swift instead)
+
+// Local model for demo purposes (mirrors DocScanModels.swift structure)
+struct LegacyDemoDocScanResult: Identifiable {
+    let id = UUID()
+    var invoiceNumber: String
+    var vendorName: String
+    var totalAmount: String
+    var status: DemoDocScanStatus
+    var providerUsed: DemoAIProvider
+    var processingTimeMs: Int
+
+    enum DemoDocScanStatus: String {
+        case pending, review, approved
+        var displayName: String {
+            switch self {
+            case .pending: return "Pending"
+            case .review: return "Review"
+            case .approved: return "Approved"
+            }
+        }
+        var iconName: String {
+            switch self {
+            case .pending: return "clock"
+            case .review: return "eye"
+            case .approved: return "checkmark.circle"
+            }
+        }
+    }
+
+    enum DemoAIProvider: String {
+        case appleVision, localAI, cloudLLM
+        var displayName: String {
+            switch self {
+            case .appleVision: return "Apple Vision"
+            case .localAI: return "Local AI"
+            case .cloudLLM: return "Cloud LLM"
+            }
+        }
+        var iconName: String {
+            switch self {
+            case .appleVision: return "apple.logo"
+            case .localAI: return "cpu"
+            case .cloudLLM: return "cloud"
+            }
+        }
+    }
+
+    static var sampleResults: [LegacyDemoDocScanResult] {
+        [
+            LegacyDemoDocScanResult(
+                invoiceNumber: "INV-2024-001",
+                vendorName: "Acme Corp",
+                totalAmount: "1,250.00",
+                status: .approved,
+                providerUsed: .appleVision,
+                processingTimeMs: 342
+            ),
+            LegacyDemoDocScanResult(
+                invoiceNumber: "INV-2024-002",
+                vendorName: "TechSupply Inc",
+                totalAmount: "3,875.50",
+                status: .review,
+                providerUsed: .cloudLLM,
+                processingTimeMs: 1250
+            )
+        ]
+    }
+}
+
+/// Legacy demo screen - replaced by dedicated DocScanDemoScreen.swift
+private struct HomeScreen_DocScanDemoView: View {
+    @Environment(\.aisTokens) private var tokens
+    @State private var showDocScan = false
+    @State private var capturedResults: [LegacyDemoDocScanResult] = []
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: AISSpacing.xl) {
+                // Header
+                headerSection
+
+                // Description
+                descriptionSection
+
+                // Features
+                featuresSection
+
+                // Demo Button
+                demoButtonSection
+
+                // Captured Results
+                if !capturedResults.isEmpty {
+                    capturedResultsSection
+                }
+
+                // Code Example
+                codeExampleSection
+            }
+            .padding(AISSpacing.lg)
+        }
+        .navigationTitle("Document Scan")
+        .sheet(isPresented: $showDocScan) {
+            docScanSheet
+        }
+    }
+
+    private var headerSection: some View {
+        HStack(spacing: AISSpacing.md) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 48))
+                .foregroundColor(tokens.actionPrimary.color)
+
+            VStack(alignment: .leading, spacing: AISSpacing.xs) {
+                Text("AIS DocScan")
+                    .font(.title2.bold())
+                    .foregroundColor(tokens.onSurface)
+
+                Text("AI-Powered Document Scanning")
+                    .font(.subheadline)
+                    .foregroundColor(tokens.onSurfaceSecondary)
+            }
+        }
+        .padding(AISSpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tokens.surfaceSecondary)
+        .cornerRadius(AISRadius.lg)
+    }
+
+    private var descriptionSection: some View {
+        VStack(alignment: .leading, spacing: AISSpacing.sm) {
+            Text("About DocScan")
+                .font(.headline)
+                .foregroundColor(tokens.onSurface)
+
+            Text("DocScan combines AISMediaPicker for file selection with AI-powered OCR extraction. It supports multiple AI providers in a tiered fallback chain, from on-device Apple Vision to cloud LLMs.")
+                .font(.body)
+                .foregroundColor(tokens.onSurfaceSecondary)
+        }
+    }
+
+    private var featuresSection: some View {
+        VStack(alignment: .leading, spacing: AISSpacing.md) {
+            Text("Features")
+                .font(.headline)
+                .foregroundColor(tokens.onSurface)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AISSpacing.md) {
+                FeatureCard(
+                    icon: "cpu",
+                    title: "AI Router",
+                    description: "Tiered AI provider fallback chain",
+                    tokens: tokens
+                )
+                FeatureCard(
+                    icon: "text.magnifyingglass",
+                    title: "OCR Extraction",
+                    description: "Automatic field recognition",
+                    tokens: tokens
+                )
+                FeatureCard(
+                    icon: "checkmark.circle",
+                    title: "Validation",
+                    description: "Built-in approval workflow",
+                    tokens: tokens
+                )
+                FeatureCard(
+                    icon: "pencil.circle",
+                    title: "Editable Fields",
+                    description: "Review and correct values",
+                    tokens: tokens
+                )
+            }
+        }
+        .padding(AISSpacing.md)
+        .background(tokens.surfaceSecondary)
+        .cornerRadius(AISRadius.md)
+    }
+
+    private var demoButtonSection: some View {
+        VStack(spacing: AISSpacing.md) {
+            AISButton("Simulate Document Scan", type: .primary) {
+                // Add sample results for demo
+                capturedResults.insert(contentsOf: LegacyDemoDocScanResult.sampleResults, at: 0)
+            }
+
+            Text("Simulates the DocScan workflow with sample data")
+                .font(.caption)
+                .foregroundColor(tokens.onSurfaceSecondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var capturedResultsSection: some View {
+        VStack(alignment: .leading, spacing: AISSpacing.md) {
+            HStack {
+                Text("Captured Documents (\(capturedResults.count))")
+                    .font(.headline)
+                    .foregroundColor(tokens.onSurface)
+
+                Spacer()
+
+                Button("Clear All") {
+                    capturedResults.removeAll()
+                }
+                .font(.caption)
+                .foregroundColor(tokens.actionDestructive.color)
+            }
+
+            ForEach(capturedResults) { result in
+                DemoCapturedResultCard(result: result, tokens: tokens)
+            }
+        }
+    }
+
+    private var codeExampleSection: some View {
+        VStack(alignment: .leading, spacing: AISSpacing.sm) {
+            Text("Usage Example")
+                .font(.headline)
+                .foregroundColor(tokens.onSurface)
+
+            Text("""
+            AISDocumentCapture(
+                documentType: .invoice,
+                preferredProvider: .appleVision,
+                onDocumentCaptured: { result in
+                    // Post to accounting system
+                    viewModel.createAPEntry(from: result)
+                },
+                onCancel: {
+                    dismiss()
+                }
+            )
+            """)
+            .font(.system(.caption, design: .monospaced))
+            .foregroundColor(tokens.onSurface)
+            .padding(AISSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tokens.surfaceSecondary)
+            .cornerRadius(AISRadius.md)
+        }
+    }
+
+    private var docScanSheet: some View {
+        NavigationStack {
+            VStack(spacing: AISSpacing.xl) {
+                Image(systemName: "doc.text.viewfinder")
+                    .font(.system(size: 64))
+                    .foregroundColor(tokens.actionPrimary.color)
+
+                Text("Document Scanner")
+                    .font(.title2.bold())
+                    .foregroundColor(tokens.onSurface)
+
+                Text("This is a placeholder for the full DocScan component. In a complete implementation, this would show the AISMediaPicker followed by OCR extraction and field review.")
+                    .font(.body)
+                    .foregroundColor(tokens.onSurfaceSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                AISButton("Simulate Capture", type: .primary) {
+                    capturedResults.insert(LegacyDemoDocScanResult.sampleResults.first!, at: 0)
+                    showDocScan = false
+                }
+            }
+            .padding(AISSpacing.xl)
+            .navigationTitle("Scan Invoice")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showDocScan = false
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 500, minHeight: 400)
+    }
+}
+
+// MARK: - Feature Card
+
+private struct FeatureCard: View {
+    let icon: String
+    let title: String
+    let description: String
+    let tokens: AISTokenSet
+
+    var body: some View {
+        HStack(spacing: AISSpacing.sm) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(tokens.actionPrimary.color)
+                .frame(width: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.bold())
+                    .foregroundColor(tokens.onSurface)
+
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(tokens.onSurfaceSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AISSpacing.sm)
+        .background(tokens.surface)
+        .cornerRadius(AISRadius.sm)
+    }
+}
+
+// MARK: - Demo Captured Result Card
+
+private struct DemoCapturedResultCard: View {
+    let result: LegacyDemoDocScanResult
+    let tokens: AISTokenSet
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AISSpacing.sm) {
+            HStack {
+                Image(systemName: "doc.text")
+                    .foregroundColor(tokens.actionPrimary.color)
+
+                Text(result.invoiceNumber.isEmpty
+                    ? "Invoice #\(result.id.uuidString.prefix(8))"
+                    : "Invoice #\(result.invoiceNumber)")
+                    .font(.subheadline.bold())
+                    .foregroundColor(tokens.onSurface)
+
+                Spacer()
+
+                AISStateBadge(
+                    result.status.displayName,
+                    semanticState: result.status == .approved ? .completed : .warning
+                )
+            }
+
+            HStack(spacing: AISSpacing.lg) {
+                if !result.vendorName.isEmpty {
+                    Label(result.vendorName, systemImage: "building.2")
+                        .font(.caption)
+                        .foregroundColor(tokens.onSurfaceSecondary)
+                }
+
+                if !result.totalAmount.isEmpty {
+                    Label("$\(result.totalAmount)", systemImage: "dollarsign.circle")
+                        .font(.caption)
+                        .foregroundColor(tokens.onSurfaceSecondary)
+                }
+            }
+
+            HStack(spacing: AISSpacing.xs) {
+                Image(systemName: result.providerUsed.iconName)
+                    .font(.caption2)
+                    .foregroundColor(tokens.onSurfaceSecondary)
+
+                Text("Processed with \(result.providerUsed.displayName) in \(result.processingTimeMs)ms")
+                    .font(.caption2)
+                    .foregroundColor(tokens.onSurfaceSecondary)
+            }
+        }
+        .padding(AISSpacing.md)
+        .background(tokens.surfaceSecondary)
+        .cornerRadius(AISRadius.md)
+    }
+}
+
 // MARK: - Preview
 
 #if DEBUG
@@ -442,6 +821,15 @@ struct HomeScreen_Previews: PreviewProvider {
     static var previews: some View {
         HomeScreen()
             .withAISTokens()
+    }
+}
+
+struct HomeScreen_DocScanDemoView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            HomeScreen_DocScanDemoView()
+        }
+        .withAISTokens()
     }
 }
 #endif

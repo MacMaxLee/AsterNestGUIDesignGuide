@@ -30,6 +30,9 @@ class AisDataGrid<T> extends StatefulWidget {
   final double rowHeight;
   final double headerHeight;
   final List<T>? selectedRows;
+  final bool pageable;
+  final List<int> pageSizeOptions;
+  final int defaultPageSize;
 
   const AisDataGrid({
     super.key,
@@ -47,6 +50,9 @@ class AisDataGrid<T> extends StatefulWidget {
     this.rowHeight = 36,
     this.headerHeight = 40,
     this.selectedRows,
+    this.pageable = false,
+    this.pageSizeOptions = const [10, 25, 50, 100],
+    this.defaultPageSize = 25,
   });
 
   @override
@@ -66,6 +72,8 @@ class _AisDataGridState<T> extends State<AisDataGrid<T>> {
   final _scrollControllerH = ScrollController();
   final _scrollControllerV = ScrollController();
   final _focusNode = FocusNode();
+  late int _currentPage;
+  late int _pageSize;
 
   @override
   void initState() {
@@ -77,6 +85,8 @@ class _AisDataGridState<T> extends State<AisDataGrid<T>> {
     };
     _sorts = [];
     _filters = {};
+    _currentPage = 0;
+    _pageSize = widget.defaultPageSize;
   }
 
   @override
@@ -116,6 +126,33 @@ class _AisDataGridState<T> extends State<AisDataGrid<T>> {
       });
     }
     return rows;
+  }
+
+  /// Total number of pages
+  int get _totalPages {
+    if (!widget.pageable || _pageSize <= 0) return 1;
+    final count = _filteredRows.length;
+    if (count == 0) return 1;
+    return ((count + _pageSize - 1) ~/ _pageSize).clamp(1, 999999);
+  }
+
+  /// Paged data for current page
+  List<T> get _pagedRows {
+    if (!widget.pageable) return _filteredRows;
+    final rows = _filteredRows;
+    final startIndex = _currentPage * _pageSize;
+    final endIndex = (startIndex + _pageSize).clamp(0, rows.length);
+    if (startIndex >= rows.length) return [];
+    return rows.sublist(startIndex, endIndex);
+  }
+
+  /// Display range for paging info
+  (int start, int end, int total) get _displayRange {
+    final total = _filteredRows.length;
+    if (!widget.pageable) return (1, total, total);
+    final start = _currentPage * _pageSize + 1;
+    final end = ((_currentPage + 1) * _pageSize).clamp(0, total);
+    return (start, end, total);
   }
 
   int _compareValues(dynamic a, dynamic b) {
@@ -185,6 +222,30 @@ class _AisDataGridState<T> extends State<AisDataGrid<T>> {
           _toggleRowSelection(_focusedRow!);
         }
         break;
+      case LogicalKeyboardKey.tab:
+        // Tab navigates between cells, Shift+Tab goes backwards
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          // Move to previous cell
+          if (_focusedColumn! > 0) {
+            setState(() => _focusedColumn = _focusedColumn! - 1);
+          } else if (_focusedRow! > 0) {
+            setState(() {
+              _focusedRow = _focusedRow! - 1;
+              _focusedColumn = visibleCols.length - 1;
+            });
+          }
+        } else {
+          // Move to next cell
+          if (_focusedColumn! < visibleCols.length - 1) {
+            setState(() => _focusedColumn = _focusedColumn! + 1);
+          } else if (_focusedRow! < rows.length - 1) {
+            setState(() {
+              _focusedRow = _focusedRow! + 1;
+              _focusedColumn = 0;
+            });
+          }
+        }
+        break;
     }
   }
 
@@ -234,7 +295,7 @@ class _AisDataGridState<T> extends State<AisDataGrid<T>> {
   Widget build(BuildContext context) {
     final tokens = context.aisTokens;
     final visibleColumns = _columns.where((c) => c.visible).toList();
-    final rows = _filteredRows;
+    final rows = _pagedRows;
 
     return Focus(
       focusNode: _focusNode,
@@ -257,8 +318,10 @@ class _AisDataGridState<T> extends State<AisDataGrid<T>> {
             Expanded(
               child: _buildDataRows(visibleColumns, rows, tokens),
             ),
+            // Paging controls (when enabled)
+            if (widget.pageable) _buildPagingControls(tokens),
             // Footer with row count
-            _buildFooter(rows, tokens),
+            _buildFooter(_filteredRows, tokens),
           ],
         ),
       ),
@@ -487,23 +550,41 @@ class _AisDataGridState<T> extends State<AisDataGrid<T>> {
                       final isCellFocused =
                           _focusedRow == rowIndex && _focusedColumn == colIndex;
 
-                      return Container(
-                        width: _columnWidths[col.id],
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            right: BorderSide(
-                              color: tokens.onSurface.withOpacity(0.05),
+                      return GestureDetector(
+                        onDoubleTap: col.editable
+                            ? () {
+                                setState(() {
+                                  _editingRow = rowIndex;
+                                  _editingColumn = col.id;
+                                  _focusedRow = rowIndex;
+                                  _focusedColumn = colIndex;
+                                });
+                              }
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _focusedRow = rowIndex;
+                            _focusedColumn = colIndex;
+                          });
+                        },
+                        child: Container(
+                          width: _columnWidths[col.id],
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              right: BorderSide(
+                                color: tokens.onSurface.withOpacity(0.05),
+                              ),
                             ),
+                            color: isCellFocused
+                                ? tokens.actionPrimary.color.withOpacity(0.1)
+                                : null,
                           ),
-                          color: isCellFocused
-                              ? tokens.actionPrimary.color.withOpacity(0.1)
-                              : null,
+                          alignment: col.alignment,
+                          child: isEditing
+                              ? _buildEditCell(col, row, value, tokens)
+                              : _buildDisplayCell(col, value, tokens),
                         ),
-                        alignment: col.alignment,
-                        child: isEditing
-                            ? _buildEditCell(col, row, value, tokens)
-                            : _buildDisplayCell(col, value, tokens),
                       );
                     },
                   ),
@@ -531,29 +612,167 @@ class _AisDataGridState<T> extends State<AisDataGrid<T>> {
 
   Widget _buildEditCell(
       AisGridColumn<T> col, T row, dynamic value, AisTokens tokens) {
-    return TextFormField(
-      initialValue: value?.toString() ?? '',
-      autofocus: true,
-      style: const TextStyle(fontSize: 13),
-      decoration: const InputDecoration(
-        isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        border: OutlineInputBorder(),
+    final controller = TextEditingController(text: value?.toString() ?? '');
+
+    void commitEdit() {
+      final newValue = controller.text;
+      final parsedValue = col.parser?.call(newValue) ?? newValue;
+      widget.onCellChanged?.call(row, col.id, parsedValue);
+      setState(() {
+        _editingRow = null;
+        _editingColumn = null;
+      });
+    }
+
+    void cancelEdit() {
+      setState(() {
+        _editingRow = null;
+        _editingColumn = null;
+      });
+    }
+
+    return Focus(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.escape) {
+            cancelEdit();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.enter) {
+            commitEdit();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: TextFormField(
+        controller: controller,
+        autofocus: true,
+        style: const TextStyle(fontSize: 13),
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          border: OutlineInputBorder(),
+        ),
+        onFieldSubmitted: (_) => commitEdit(),
+        // Commit on tap outside (like SwiftUI's onCommit behavior)
+        onTapOutside: (_) => commitEdit(),
       ),
-      onFieldSubmitted: (newValue) {
-        final parsedValue = col.parser?.call(newValue) ?? newValue;
-        widget.onCellChanged?.call(row, col.id, parsedValue);
-        setState(() {
-          _editingRow = null;
-          _editingColumn = null;
-        });
-      },
-      onTapOutside: (_) {
-        setState(() {
-          _editingRow = null;
-          _editingColumn = null;
-        });
-      },
+    );
+  }
+
+  Widget _buildPagingControls(AisTokens tokens) {
+    final range = _displayRange;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(
+          top: BorderSide(color: tokens.onSurface.withOpacity(0.2)),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Page size selector
+          Text(
+            'Rows per page:',
+            style: TextStyle(
+              fontSize: 11,
+              color: tokens.onSurfaceSecondary,
+            ),
+          ),
+          const SizedBox(width: 8),
+          DropdownButton<int>(
+            value: _pageSize,
+            isDense: true,
+            underline: const SizedBox(),
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.onSurface,
+            ),
+            items: widget.pageSizeOptions.map((size) {
+              return DropdownMenuItem<int>(
+                value: size,
+                child: Text('$size'),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  _pageSize = value;
+                  _currentPage = 0;
+                });
+              }
+            },
+          ),
+          const Spacer(),
+          // Range display
+          Text(
+            'Showing ${range.$1}-${range.$2} of ${range.$3}',
+            style: TextStyle(
+              fontSize: 11,
+              color: tokens.onSurfaceSecondary,
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Navigation buttons
+          IconButton(
+            icon: const Icon(Icons.first_page, size: 18),
+            onPressed: _currentPage > 0
+                ? () => setState(() => _currentPage = 0)
+                : null,
+            tooltip: 'First page',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            color: tokens.actionPrimary.color,
+            disabledColor: tokens.onSurfaceSecondary.withOpacity(0.5),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 18),
+            onPressed: _currentPage > 0
+                ? () => setState(() => _currentPage--)
+                : null,
+            tooltip: 'Previous page',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            color: tokens.actionPrimary.color,
+            disabledColor: tokens.onSurfaceSecondary.withOpacity(0.5),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              'Page ${_currentPage + 1} of $_totalPages',
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.onSurface,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 18),
+            onPressed: _currentPage < _totalPages - 1
+                ? () => setState(() => _currentPage++)
+                : null,
+            tooltip: 'Next page',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            color: tokens.actionPrimary.color,
+            disabledColor: tokens.onSurfaceSecondary.withOpacity(0.5),
+          ),
+          IconButton(
+            icon: const Icon(Icons.last_page, size: 18),
+            onPressed: _currentPage < _totalPages - 1
+                ? () => setState(() => _currentPage = _totalPages - 1)
+                : null,
+            tooltip: 'Last page',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            color: tokens.actionPrimary.color,
+            disabledColor: tokens.onSurfaceSecondary.withOpacity(0.5),
+          ),
+        ],
+      ),
     );
   }
 

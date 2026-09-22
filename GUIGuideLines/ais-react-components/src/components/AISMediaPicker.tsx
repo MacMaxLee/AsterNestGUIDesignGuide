@@ -14,12 +14,13 @@
  * 4. ERROR HANDLING: Graceful failure with informative error states
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import clsx from 'clsx';
+import type { LucideIcon } from 'lucide-react';
 import {
   Upload,
   X,
-  File,
+  File as FileIcon,
   Image,
   Video,
   Music,
@@ -28,13 +29,50 @@ import {
   Check,
   AlertCircle,
   Clock,
-  Info,
   Loader2,
-  FolderOpen,
   Copy,
+  Camera,
+  Clipboard,
+  Folder,
 } from 'lucide-react';
 import { useAISTokens } from '../core/AISProvider';
-import { AISSpacing } from '../core/tokens';
+
+// ============================================================================
+// Input Source Types
+// ============================================================================
+
+/**
+ * Input sources for media picker
+ */
+export type AISInputSource = 'files' | 'camera' | 'clipboard';
+
+/**
+ * Input source configuration
+ */
+interface InputSourceConfig {
+  label: string;
+  icon: LucideIcon;
+  isAvailable: boolean;
+}
+
+const INPUT_SOURCE_CONFIG: Record<AISInputSource, InputSourceConfig> = {
+  files: {
+    label: 'Browse Files',
+    icon: Folder,
+    isAvailable: true,
+  },
+  camera: {
+    label: 'Camera',
+    icon: Camera,
+    // Camera is available via MediaDevices API in modern browsers
+    isAvailable: typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia,
+  },
+  clipboard: {
+    label: 'Paste',
+    icon: Clipboard,
+    isAvailable: typeof navigator !== 'undefined' && !!navigator.clipboard?.read,
+  },
+};
 
 // ============================================================================
 // Types
@@ -112,7 +150,7 @@ export interface AISFileInfo {
  */
 interface MediaTypeConfig {
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
   extensions: string[];
   accept: string;
 }
@@ -168,7 +206,7 @@ const MEDIA_TYPE_CONFIG: Record<AISMediaType, MediaTypeConfig> = {
   },
   any: {
     label: 'Any',
-    icon: File,
+    icon: FileIcon,
     extensions: [],
     accept: '*/*',
   },
@@ -270,6 +308,8 @@ async function createFileInfo(
 export interface AISMediaPickerProps {
   /** Allowed media types */
   allowedTypes?: AISMediaType[];
+  /** Allowed input sources (files, camera, clipboard) */
+  inputSources?: AISInputSource[];
   /** Maximum file size in bytes (null = unlimited) */
   maxSizeBytes?: number;
   /** Allow multiple file selection */
@@ -296,12 +336,19 @@ export interface AISMediaPickerProps {
   disabled?: boolean;
   /** Whether to compute file checksums */
   computeChecksums?: boolean;
+  /** Show input source selector (when multiple sources available) */
+  showSourceSelector?: boolean;
+  /** Enable built-in review mode before confirming selection */
+  enableReview?: boolean;
+  /** Called when files are confirmed in review mode */
+  onFilesConfirmed?: (files: AISFileInfo[]) => void;
   /** CSS class name */
   className?: string;
 }
 
 export function AISMediaPicker({
   allowedTypes = ['any'],
+  inputSources = ['files', 'clipboard'],
   maxSizeBytes,
   multiple = false,
   maxFiles,
@@ -314,16 +361,48 @@ export function AISMediaPicker({
   hint,
   disabled = false,
   computeChecksums = false,
+  showSourceSelector = true,
+  enableReview = false,
+  onFilesConfirmed,
   className,
 }: AISMediaPickerProps) {
   const tokens = useAISTokens();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [internalFiles, setInternalFiles] = useState<AISFileInfo[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [_clipboardHasContent, setClipboardHasContent] = useState(false);
+  // Review mode state
+  const [showReviewPanel, setShowReviewPanel] = useState(false);
+  const [selectedFileForPreview, setSelectedFileForPreview] = useState<AISFileInfo | null>(null);
+  // Note: _clipboardHasContent could be used to conditionally show clipboard paste button
+  void _clipboardHasContent;
 
   const files = controlledFiles ?? internalFiles;
+
+  // Get available input sources
+  const availableSources = inputSources.filter(
+    (source) => INPUT_SOURCE_CONFIG[source].isAvailable
+  );
+
+  // Check clipboard content on mount
+  useEffect(() => {
+    checkClipboardContent();
+  }, []);
+
+  // Check if clipboard has compatible content
+  const checkClipboardContent = async () => {
+    try {
+      // Check if clipboard API is available
+      if (typeof navigator.clipboard?.read === 'function') {
+        setClipboardHasContent(true);
+      }
+    } catch {
+      setClipboardHasContent(false);
+    }
+  };
 
   // Build accept string for file input
   const acceptString = allowedTypes.includes('any')
@@ -397,6 +476,10 @@ export function AISMediaPicker({
             setInternalFiles(updatedFiles);
           }
           onFilesSelected?.(updatedFiles);
+          // Show review panel if enableReview is true
+          if (enableReview) {
+            setShowReviewPanel(true);
+          }
         }
       } catch (error) {
         setErrorMessage(`Error processing files: ${error}`);
@@ -412,6 +495,7 @@ export function AISMediaPicker({
       computeChecksums,
       controlledFiles,
       disabled,
+      enableReview,
       files,
       maxFiles,
       maxSizeBytes,
@@ -439,6 +523,147 @@ export function AISMediaPicker({
       setErrorMessage(null);
     },
     [files, controlledFiles, onFileRemoved, onFilesSelected]
+  );
+
+  // Handle input source selection
+  const handleSourceSelection = useCallback(
+    (source: AISInputSource) => {
+      switch (source) {
+        case 'files':
+          fileInputRef.current?.click();
+          break;
+        case 'camera':
+          cameraInputRef.current?.click();
+          break;
+        case 'clipboard':
+          pasteFromClipboard();
+          break;
+      }
+    },
+    []
+  );
+
+  // Paste from clipboard
+  const pasteFromClipboard = useCallback(async () => {
+    if (disabled || isLoading) return;
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      // Try to read from clipboard
+      const clipboardItems = await navigator.clipboard.read();
+
+      for (const item of clipboardItems) {
+        // Try to get image
+        if (item.types.includes('image/png') || item.types.includes('image/jpeg')) {
+          const imageType = item.types.find((t) => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            const file = new File(
+              [blob],
+              `pasted_image_${Date.now()}.${imageType.split('/')[1]}`,
+              { type: imageType }
+            );
+            const fileInfo = await createFileInfo(file, computeChecksums);
+
+            // Check file size
+            if (maxSizeBytes && fileInfo.sizeBytes > maxSizeBytes) {
+              setErrorMessage(`Pasted image exceeds maximum size of ${maxSizeText}`);
+              continue;
+            }
+
+            const updatedFiles = multiple ? [...files, fileInfo] : [fileInfo];
+            if (!controlledFiles) {
+              setInternalFiles(updatedFiles);
+            }
+            onFilesSelected?.(updatedFiles);
+            if (enableReview) {
+              setShowReviewPanel(true);
+            }
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Try to get text
+        if (item.types.includes('text/plain')) {
+          const blob = await item.getType('text/plain');
+          const text = await blob.text();
+
+          // Create a text file from clipboard content
+          const file = new File(
+            [text],
+            `pasted_text_${Date.now()}.txt`,
+            { type: 'text/plain' }
+          );
+          const fileInfo = await createFileInfo(file, computeChecksums);
+
+          const updatedFiles = multiple ? [...files, fileInfo] : [fileInfo];
+          if (!controlledFiles) {
+            setInternalFiles(updatedFiles);
+          }
+          onFilesSelected?.(updatedFiles);
+          if (enableReview) {
+            setShowReviewPanel(true);
+          }
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      setErrorMessage('No compatible content found in clipboard');
+    } catch (error) {
+      // Fallback: try to read text from clipboard
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          const file = new File(
+            [text],
+            `pasted_text_${Date.now()}.txt`,
+            { type: 'text/plain' }
+          );
+          const fileInfo = await createFileInfo(file, computeChecksums);
+
+          const updatedFiles = multiple ? [...files, fileInfo] : [fileInfo];
+          if (!controlledFiles) {
+            setInternalFiles(updatedFiles);
+          }
+          onFilesSelected?.(updatedFiles);
+          if (enableReview) {
+            setShowReviewPanel(true);
+          }
+        } else {
+          setErrorMessage('No compatible content found in clipboard');
+        }
+      } catch {
+        setErrorMessage('Unable to read from clipboard. Please use Ctrl+V or check permissions.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    disabled,
+    enableReview,
+    isLoading,
+    computeChecksums,
+    maxSizeBytes,
+    maxSizeText,
+    multiple,
+    files,
+    controlledFiles,
+    onFilesSelected,
+  ]);
+
+  // Handle camera capture
+  const handleCameraCapture = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      handleFiles(e.target.files);
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = '';
+      }
+    },
+    [handleFiles]
   );
 
   // Drag handlers
@@ -530,6 +755,33 @@ export function AISMediaPicker({
         </label>
       )}
 
+      {/* Source selector (if multiple sources available) */}
+      {showSourceSelector && availableSources.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {availableSources.map((source) => {
+            const config = INPUT_SOURCE_CONFIG[source];
+            const Icon = config.icon;
+            return (
+              <button
+                key={source}
+                onClick={() => handleSourceSelection(source)}
+                disabled={disabled}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs transition-colors"
+                style={{
+                  backgroundColor: tokens.surfaceSecondary,
+                  color: disabled
+                    ? tokens.onSurfaceSecondary + '50'
+                    : tokens.onSurface,
+                }}
+              >
+                <Icon size={14} />
+                <span>{config.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Drop zone */}
       <div
         onClick={handleClick}
@@ -554,12 +806,24 @@ export function AISMediaPicker({
           cursor: disabled ? 'not-allowed' : 'pointer',
         }}
       >
+        {/* File input */}
         <input
           ref={fileInputRef}
           type="file"
           accept={acceptString}
           multiple={multiple}
           onChange={(e) => handleFiles(e.target.files)}
+          className="hidden"
+          disabled={disabled}
+        />
+
+        {/* Camera input (for mobile) */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleCameraCapture}
           className="hidden"
           disabled={disabled}
         />
@@ -655,7 +919,7 @@ export function AISMediaPicker({
             className="flex items-center gap-2 px-4 py-2"
             style={{ backgroundColor: tokens.surface }}
           >
-            <File size={16} style={{ color: tokens.onSurfaceSecondary }} />
+            <FileIcon size={16} style={{ color: tokens.onSurfaceSecondary }} />
             <span
               className="text-xs font-medium"
               style={{ color: tokens.onSurfaceSecondary }}
@@ -744,6 +1008,143 @@ export function AISMediaPicker({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Built-in Review Panel */}
+      {enableReview && files.length > 0 && showReviewPanel && (
+        <div
+          className="mt-4 rounded-lg border"
+          style={{
+            backgroundColor: tokens.surface,
+            borderColor: `${tokens.onSurface}20`,
+          }}
+        >
+          {/* Review header */}
+          <div
+            className="flex items-center justify-between px-4 py-3 border-b"
+            style={{
+              backgroundColor: tokens.surfaceSecondary,
+              borderColor: `${tokens.onSurface}10`,
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Check size={16} style={{ color: tokens.actionPrimary.color }} />
+              <span className="text-sm font-bold" style={{ color: tokens.onSurface }}>
+                Review Selected Files
+              </span>
+            </div>
+            <span className="text-xs" style={{ color: tokens.onSurfaceSecondary }}>
+              {files.length} file{files.length > 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* Thumbnail grid */}
+          <div className="flex flex-wrap gap-2 p-4">
+            {files.map((file) => {
+              const isSelected = selectedFileForPreview?.id === file.id;
+              const Icon = MEDIA_TYPE_CONFIG[file.mediaType].icon;
+              const color = getMediaColor(file.mediaType);
+
+              return (
+                <div
+                  key={file.id}
+                  onClick={() => setSelectedFileForPreview(isSelected ? null : file)}
+                  className="relative w-20 h-20 rounded cursor-pointer overflow-hidden"
+                  style={{
+                    backgroundColor: `${color}15`,
+                    border: isSelected
+                      ? `2px solid ${tokens.actionPrimary.color}`
+                      : `1px solid ${tokens.onSurface}10`,
+                  }}
+                >
+                  {file.previewUrl ? (
+                    <img
+                      src={file.previewUrl}
+                      alt={file.fileName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full">
+                      <Icon size={32} style={{ color }} />
+                    </div>
+                  )}
+                  {/* Remove button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFile(file);
+                    }}
+                    className="absolute top-1 right-1 rounded-full p-0.5"
+                    style={{ backgroundColor: tokens.actionDestructive.color }}
+                  >
+                    <X size={10} style={{ color: 'white' }} />
+                  </button>
+                  {/* Selection indicator */}
+                  {isSelected && (
+                    <div
+                      className="absolute bottom-1 left-1 rounded-full p-0.5"
+                      style={{ backgroundColor: tokens.actionPrimary.color }}
+                    >
+                      <Check size={10} style={{ color: 'white' }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Selected file details */}
+          {selectedFileForPreview && (
+            <div
+              className="mx-4 mb-4 p-3 rounded"
+              style={{ backgroundColor: tokens.surfaceSecondary }}
+            >
+              <p className="font-medium text-sm" style={{ color: tokens.onSurface }}>
+                {selectedFileForPreview.fileName}
+              </p>
+              <div className="flex gap-3 text-xs mt-1">
+                <span style={{ color: tokens.onSurfaceSecondary }}>
+                  {formatFileSize(selectedFileForPreview.sizeBytes)}
+                </span>
+                <span style={{ color: tokens.onSurfaceSecondary }}>
+                  {selectedFileForPreview.extension.toUpperCase().replace('.', '')}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Confirm/Cancel buttons */}
+          <div className="flex gap-3 px-4 pb-4">
+            <button
+              onClick={() => {
+                setShowReviewPanel(false);
+                setSelectedFileForPreview(null);
+              }}
+              className="flex-1 py-2 px-4 rounded text-sm"
+              style={{
+                border: `1px solid ${tokens.onSurface}30`,
+                color: tokens.onSurfaceSecondary,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                onFilesConfirmed?.(files);
+                setShowReviewPanel(false);
+                setSelectedFileForPreview(null);
+              }}
+              className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded text-sm"
+              style={{
+                backgroundColor: tokens.actionConfirm.color,
+                color: 'white',
+              }}
+            >
+              <Check size={16} />
+              Confirm Selection
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -115,9 +115,13 @@ struct MediaPickerDemoScreen: View {
                 )
             }
 
-            // Multiple file picker
+            // Multiple file picker with review
             VStack(alignment: .leading, spacing: AISSpacing.sm) {
-                Text("Multiple File Selection").font(.subheadline.bold())
+                Text("Multiple File Selection (with Review)").font(.subheadline.bold())
+
+                Text("Files will be shown for review before being added")
+                    .font(.caption)
+                    .foregroundColor(tokens.onSurfaceSecondary)
 
                 AISMediaPicker(
                     state: $pickerState,
@@ -126,6 +130,7 @@ struct MediaPickerDemoScreen: View {
                     maxFileSize: 50_000_000, // 50MB limit
                     buttonLabel: "Select Multiple Files",
                     buttonType: .primary,
+                    enableReview: true,
                     onFilesSelected: { files in
                         selectedFiles.append(contentsOf: files)
                     },
@@ -137,6 +142,21 @@ struct MediaPickerDemoScreen: View {
             .padding()
             .background(tokens.surfaceSecondary)
             .cornerRadius(AISRadius.md)
+
+            // Success feedback section
+            if case .completed(let files) = pickerState, !files.isEmpty {
+                HStack(spacing: AISSpacing.sm) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("\(files.count) file(s) successfully added!")
+                        .font(.subheadline)
+                        .foregroundColor(.green)
+                }
+                .padding(AISSpacing.md)
+                .frame(maxWidth: .infinity)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(AISRadius.md)
+            }
         }
     }
 

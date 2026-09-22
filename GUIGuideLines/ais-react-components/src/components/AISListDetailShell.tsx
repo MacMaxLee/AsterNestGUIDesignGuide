@@ -384,7 +384,7 @@ export function AISListDetailShell<T extends { id: string | number }>({
                 onClearFilters={onClearFilters}
               />
             ) : (
-              <ul className="divide-y" style={{ divideColor: tokens.onSurfaceSecondary + '10' }}>
+              <ul className="divide-y" style={{ borderColor: tokens.onSurfaceSecondary + '10' }}>
                 {items.map((item) => {
                   const isSelected = selection?.id === item.id;
 

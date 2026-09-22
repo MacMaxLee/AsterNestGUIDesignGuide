@@ -190,6 +190,27 @@ For tabular data entry and display, an Excel-like data grid provides familiar in
 - **Row numbers optional** but recommended for large datasets
 - **Footer shows:** row count, selected count, filter status, sort status
 
+**Pagination:**
+Pagination provides navigation through large datasets:
+
+| Element | Purpose | Required |
+|---|---|---|
+| Page indicator | Shows "Page X of Y" or "1-10 of 100" | Yes |
+| Previous/Next buttons | Navigate between adjacent pages | Yes |
+| First/Last buttons | Jump to extremes of dataset | Optional |
+| Page size selector | Choose rows per page (10, 25, 50, 100) | Yes |
+| Page number input | Direct navigation to specific page | Optional |
+
+**Pagination Binding Rules:**
+- **Page size persisted** per user per grid — user preference survives session
+- **Page resets on filter change** — new filter always shows page 1
+- **Sort preserves page** where feasible — if data allows, maintain position after re-sort
+- **Disabled states clear** — Previous/First disabled on page 1; Next/Last disabled on final page
+- **Loading state** — pagination controls disabled during data fetch
+- **Empty state** — pagination hidden when zero records exist
+- **Total count required** — "Page 1 of ?" is not acceptable; fetch count before or with data
+- **Keyboard accessible** — all pagination controls reachable by keyboard
+
 ### 3.5 Grid Layout
 
 For card-based or tile-based displays:
@@ -199,7 +220,36 @@ For card-based or tile-based displays:
 - **Aspect ratio control:** maintain consistent card proportions
 - **Adaptive mode:** automatically calculate column count based on container width
 
-### 3.6 Media and File Handling
+### 3.6 Autocomplete
+
+Type-ahead autocomplete provides efficient selection from large option sets:
+
+**Core Features:**
+- **Type-ahead filtering** with debounced input for performance
+- **Keyboard navigation:** Arrow Up/Down to highlight, Enter to select, Escape to close
+- **Custom suggestion rendering** with support for icons, secondary text, and custom layouts
+- **Clear button** to reset selection
+- **Loading state** for async data fetching
+- **Error state** with validation message display
+- **Selection indicator** showing currently selected item
+
+**Binding Rules:**
+- **Suggestions are filtered client-side or server-side** depending on data volume
+- **Maximum visible suggestions** configurable (default: 8) to prevent overwhelming dropdowns
+- **Mouse and keyboard parity:** both interaction methods must be fully functional
+- **Focus management:** dropdown appears on focus, closes on blur (with delay for click handling)
+- **Accessibility:** ARIA attributes for combobox pattern, announced to assistive technology
+- **Placeholder text** indicates expected input format
+- **Display text extraction** from complex objects via configurable function
+
+**Visual Styles:**
+| Style | Use Case |
+|---|---|
+| Standard | Default appearance with subtle border |
+| Outlined | Emphasized border for form context |
+| Filled | Filled background for visual grouping |
+
+### 3.7 Media and File Handling
 
 Applications handling file uploads/downloads implement a unified file information structure:
 
@@ -251,6 +301,71 @@ Applications handling file uploads/downloads implement a unified file informatio
 - **Remove action** with confirmation for destructive operations
 - **File info display:** formatted size, dimensions, duration as applicable
 - **Database-ready output:** all fields populated for immediate storage
+
+### 3.8 Document Scanning and OCR
+
+Applications requiring document capture (invoices, receipts, bills) implement a multi-stage pipeline:
+
+**Pipeline Stages:**
+```
+Media Picker → OCR → Field Extraction → Line Item Parsing → Review → Commit
+```
+
+**OCR Provider Chain:**
+
+| Tier | Provider | Platform | Notes |
+|---|---|---|---|
+| 0 | Self Mapping | All | Manual entry fallback |
+| 1 | Platform Vision | iOS/macOS: Apple Vision, Android: ML Kit | On-device, free, offline |
+| 2 | Local AI | Desktop: MLX/Ollama | On-device inference |
+| 3 | Browser OCR | Web | Tesseract.js for browser-based OCR |
+| 4 | Cloud LLM | All | Claude / ChatGPT / Gemini (user-selectable) |
+
+**Line Item Parsing Binding Rules:**
+- **Skip keywords excluded:** SUBTOTAL, TOTAL, TAX, CASH, CREDIT, PAYMENT, AMOUNT, WHOLESALE, etc.
+- **Skip patterns excluded:** Location identifiers (e.g., "Eastvale #1317"), masked card numbers, date lines
+- **Costco format supported:** SKU + description on one line, price on next line
+- **Price format required:** Decimal prices only (###.##) to avoid false positives
+- **Tax code validation:** Single uppercase letter only (A-Z); OCR artifacts like "Ii" are ignored
+- **Minimum description length:** At least 2 consecutive letters required
+
+**Extracted Invoice Structure:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `invoiceNumber` | String | No | Extracted invoice/receipt number |
+| `vendorName` | String | Yes | Vendor name (with store number if detected) |
+| `vendorAddress` | String | No | Street address (excludes store number prefix) |
+| `invoiceDate` | Date | No | Transaction date |
+| `totalAmount` | Decimal | Yes | Total amount |
+| `subtotal` | Decimal | No | Subtotal before tax |
+| `taxAmount` | Decimal | No | Tax amount |
+| `lineItems` | Array | Yes | Parsed line items |
+| `rawOCRText` | String | No | Original OCR text for debugging |
+
+**Line Item Structure:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `description` | String | Yes | Item description |
+| `quantity` | Decimal | Yes | Quantity (default: 1) |
+| `unitPrice` | Decimal | Yes | Price per unit |
+| `amount` | Decimal | Yes | Line total |
+| `taxCode` | String | No | Single letter tax code (A, E, etc.) |
+| `confidence` | Decimal | No | Extraction confidence (0.0-1.0) |
+
+**Review Output Display:**
+- **Text tab:** Formatted invoice text with line items table, totals, and provider info
+- **JSON tab:** Structured JSON output for API/database integration
+- **Copy to clipboard:** Both formats must be copyable
+- **Selectable text:** All output text must be selectable for manual copying
+
+**Conformance Tests (C-51 to C-55):**
+- **C-51:** Line item parser skips non-item lines (SUBTOTAL, TAX, location identifiers)
+- **C-52:** Tax code validation accepts only single uppercase letters
+- **C-53:** OCR output displays both Text and JSON formats with tab selector
+- **C-54:** Copy to clipboard works for both Text and JSON output
+- **C-55:** Line items display shows description, quantity, unit price, amount, and tax code
 
 ---
 
@@ -474,6 +589,19 @@ Stack-neutral. Each application implements all of these, in its own framework.
 | **C-40** | Media type icons | Each media type displays its designated icon |
 | **C-41** | Upload status display | File upload shows status (pending, uploading, completed, failed) with appropriate visual |
 | **C-42** | Grid layout responsive | Grid layout adapts columns to available width respecting minimum child width |
+| **C-43** | Pagination page indicator | Pagination shows current page and total pages or record range |
+| **C-44** | Pagination navigation | Previous/Next buttons work correctly; disabled at boundaries |
+| **C-45** | Pagination page size | Page size selector allows choosing rows per page; preference persisted |
+| **C-46** | Pagination filter reset | Changing filter resets to page 1 |
+| **C-47** | Pagination keyboard access | All pagination controls reachable and operable by keyboard |
+| **C-48** | Autocomplete keyboard nav | Arrow Up/Down highlights suggestions; Enter selects; Escape closes dropdown |
+| **C-49** | Autocomplete clear | Clear button resets selection and input text |
+| **C-50** | Autocomplete accessibility | ARIA combobox attributes present; state announced to assistive technology |
+| **C-51** | Line item parser skip | Line item parser excludes SUBTOTAL, TAX, AMOUNT, location identifiers, masked cards |
+| **C-52** | Tax code validation | Tax code accepts only single uppercase letter (A-Z); rejects OCR artifacts like "Ii" |
+| **C-53** | OCR output tabs | OCR output displays both Text and JSON formats with tab selector |
+| **C-54** | OCR output copy | Copy to clipboard works for both Text and JSON output formats |
+| **C-55** | Line items display | Line items table shows description, quantity, unit price, amount, and tax code columns |
 
 ---
 

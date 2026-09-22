@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { AISDataGrid, type AISGridColumn } from '../../components/AISDataGrid';
 import { AISStateBadge } from '../../components/AISStateBadge';
 import { useAISTokens } from '../../core/AISProvider';
@@ -15,19 +15,31 @@ interface Product {
   lastUpdated: Date;
 }
 
-// Sample data
-const sampleProducts: Product[] = [
-  { id: '1', name: 'Widget Pro', category: 'Electronics', price: 29.99, quantity: 150, status: 'active', lastUpdated: new Date() },
-  { id: '2', name: 'Gadget Plus', category: 'Electronics', price: 49.99, quantity: 75, status: 'active', lastUpdated: new Date(Date.now() - 86400000) },
-  { id: '3', name: 'Super Tool', category: 'Tools', price: 19.99, quantity: 200, status: 'active', lastUpdated: new Date(Date.now() - 172800000) },
-  { id: '4', name: 'Mega Device', category: 'Electronics', price: 199.99, quantity: 25, status: 'inactive', lastUpdated: new Date(Date.now() - 259200000) },
-  { id: '5', name: 'Basic Item', category: 'Accessories', price: 9.99, quantity: 500, status: 'active', lastUpdated: new Date(Date.now() - 345600000) },
-  { id: '6', name: 'Premium Kit', category: 'Tools', price: 79.99, quantity: 50, status: 'pending', lastUpdated: new Date(Date.now() - 432000000) },
-  { id: '7', name: 'Starter Pack', category: 'Accessories', price: 14.99, quantity: 300, status: 'active', lastUpdated: new Date(Date.now() - 518400000) },
-  { id: '8', name: 'Pro Series', category: 'Electronics', price: 299.99, quantity: 10, status: 'draft', lastUpdated: new Date(Date.now() - 604800000) },
-  { id: '9', name: 'Economy Bundle', category: 'Accessories', price: 24.99, quantity: 180, status: 'active', lastUpdated: new Date(Date.now() - 691200000) },
-  { id: '10', name: 'Deluxe Edition', category: 'Electronics', price: 449.99, quantity: 5, status: 'pending', lastUpdated: new Date(Date.now() - 777600000) },
+// Generate 50 sample products to demonstrate pagination
+const productNames = [
+  'Widget Pro', 'Gadget Plus', 'Super Tool', 'Mega Device', 'Basic Item',
+  'Premium Kit', 'Starter Pack', 'Pro Series', 'Economy Bundle', 'Deluxe Edition',
+  'Smart Hub', 'Power Bank', 'Cable Set', 'Adapter Pro', 'Mini Speaker',
+  'USB Drive', 'Mouse Pad', 'Keyboard', 'Monitor Stand', 'Desk Lamp',
+  'Headphones', 'Webcam HD', 'Router Pro', 'Switch Box', 'Card Reader',
+  'Phone Mount', 'Laptop Stand', 'Dock Station', 'Charger Fast', 'Battery Pack',
+  'Screen Guard', 'Case Cover', 'Stylus Pen', 'Memory Card', 'SSD Drive',
+  'Graphics Tab', 'Drawing Pad', 'Mic Stand', 'Pop Filter', 'Audio Mix',
+  'Light Ring', 'Tripod Pro', 'Camera Bag', 'Lens Kit', 'Filter Set',
+  'Gimbal Pro', 'Drone Mini', 'Action Cam', 'VR Headset', 'Game Pad',
 ];
+const categories = ['Electronics', 'Tools', 'Accessories', 'Office', 'Gaming'];
+const statuses: AISBadgeState[] = ['active', 'inactive', 'pending', 'draft'];
+
+const sampleProducts: Product[] = productNames.map((name, i) => ({
+  id: String(i + 1),
+  name,
+  category: categories[i % categories.length],
+  price: 9.99 + (i * 7.5) % 400,
+  quantity: 10 + (i * 17) % 500,
+  status: statuses[i % statuses.length],
+  lastUpdated: new Date(Date.now() - i * 86400000),
+}));
 
 export function DataGridDemo() {
   const tokens = useAISTokens();
@@ -141,6 +153,7 @@ export function DataGridDemo() {
           <li>• <strong>Double-click cells</strong> to edit (Name, Price, Qty columns are editable)</li>
           <li>• <strong>Keyboard navigation:</strong> Arrow keys, Tab, Enter/F2 to edit, Escape to cancel</li>
           <li>• <strong>Export CSV</strong> button exports current filtered/sorted view</li>
+          <li>• <strong>Pagination</strong> with configurable page sizes (10, 25, 50, 100)</li>
         </ul>
       </div>
 
@@ -188,6 +201,8 @@ export function DataGridDemo() {
           searchText={searchText}
           onCellEdit={handleCellEdit}
           maxHeight={500}
+          pageable
+          defaultPageSize={10}
         />
       </div>
 

@@ -3,16 +3,14 @@
  * Demo page for AISMediaPicker components
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAISTokens } from '../../core/AISProvider';
-import { AISSpacing } from '../../core/tokens';
 import {
   AISMediaPicker,
   AISFileChip,
   AISFileInfoDisplay,
   AISFileInfo,
 } from '../../components/AISMediaPicker';
-import { AISButton } from '../../components/AISButton';
 
 function MediaPickerDemo() {
   const tokens = useAISTokens();

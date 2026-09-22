@@ -84,8 +84,8 @@ export function AISProvider({
     ...customTheme,
   }), [baseTheme, customTheme]);
 
-  const value = useMemo(() => ({
-    theme,
+  const value = useMemo((): AISContextValue => ({
+    theme: theme as AISTheme,
     isDarkMode: darkMode,
   }), [theme, darkMode]);
 

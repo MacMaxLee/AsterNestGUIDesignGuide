@@ -3,9 +3,8 @@
  * Demo page for AISGridLayout components
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAISTokens } from '../../core/AISProvider';
-import { AISSpacing } from '../../core/tokens';
 import {
   AISGridLayout,
   AISAdaptiveGridLayout,
@@ -91,7 +90,7 @@ function GridLayoutDemo() {
                   columns === n ? tokens.actionPrimary.color : tokens.surface,
                 color:
                   columns === n
-                    ? tokens.actionPrimary.onColor
+                    ? '#FFFFFF'
                     : tokens.onSurface,
               }}
             >

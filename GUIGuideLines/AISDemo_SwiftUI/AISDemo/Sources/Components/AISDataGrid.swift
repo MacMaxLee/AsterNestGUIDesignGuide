@@ -288,6 +288,15 @@ public struct AISDataGrid<Row>: View where Row: Identifiable & Hashable {
     /// External search text (optional, searches all columns)
     let externalSearchText: String?
 
+    /// Whether paging is enabled
+    let pageable: Bool
+
+    /// Page size options
+    let pageSizeOptions: [Int]
+
+    /// Default page size
+    let defaultPageSize: Int
+
     // MARK: - Environment
 
     @Environment(\.aisTokens) private var tokens
@@ -299,6 +308,12 @@ public struct AISDataGrid<Row>: View where Row: Identifiable & Hashable {
 
     /// Per-column filter text
     @State private var filters: [String: String] = [:]
+
+    /// Current page (0-indexed)
+    @State private var currentPage: Int = 0
+
+    /// Current page size
+    @State private var pageSize: Int = 25
 
     /// Currently editing cell (row ID, column ID)
     @State private var editingCell: (RowID, String)?
@@ -335,6 +350,9 @@ public struct AISDataGrid<Row>: View where Row: Identifiable & Hashable {
         showRowNumbers: Bool = true,
         showFilters: Bool = true,
         searchText: String? = nil,
+        pageable: Bool = false,
+        pageSizeOptions: [Int] = [10, 25, 50, 100],
+        defaultPageSize: Int = 25,
         onCellEdit: ((Row, String, String) -> Void)? = nil,
         onSelectionChange: ((Set<RowID>) -> Void)? = nil
     ) {
@@ -345,6 +363,9 @@ public struct AISDataGrid<Row>: View where Row: Identifiable & Hashable {
         self.showRowNumbers = showRowNumbers
         self.showFilters = showFilters
         self.externalSearchText = searchText
+        self.pageable = pageable
+        self.pageSizeOptions = pageSizeOptions
+        self.defaultPageSize = defaultPageSize
         self.onCellEdit = onCellEdit
         self.onSelectionChange = onSelectionChange
     }
@@ -398,6 +419,30 @@ public struct AISDataGrid<Row>: View where Row: Identifiable & Hashable {
         return result
     }
 
+    /// Total number of pages
+    private var totalPages: Int {
+        guard pageable, pageSize > 0 else { return 1 }
+        return max(1, Int(ceil(Double(processedData.count) / Double(pageSize))))
+    }
+
+    /// Data for the current page
+    private var pagedData: [Row] {
+        guard pageable else { return processedData }
+        let startIndex = currentPage * pageSize
+        let endIndex = min(startIndex + pageSize, processedData.count)
+        guard startIndex < processedData.count else { return [] }
+        return Array(processedData[startIndex..<endIndex])
+    }
+
+    /// Range of rows being displayed (1-indexed for display)
+    private var displayRange: (start: Int, end: Int, total: Int) {
+        let total = processedData.count
+        guard pageable else { return (1, total, total) }
+        let start = currentPage * pageSize + 1
+        let end = min((currentPage + 1) * pageSize, total)
+        return (start, end, total)
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -409,9 +454,10 @@ public struct AISDataGrid<Row>: View where Row: Identifiable & Hashable {
             ScrollView([.horizontal, .vertical]) {
                 LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                     Section {
-                        // Data rows
-                        ForEach(Array(processedData.enumerated()), id: \.element.id) { index, row in
-                            gridRow(row: row, index: index)
+                        // Data rows (use pagedData when paging is enabled)
+                        ForEach(Array(pagedData.enumerated()), id: \.element.id) { index, row in
+                            let actualIndex = pageable ? (currentPage * pageSize + index) : index
+                            gridRow(row: row, index: actualIndex)
                         }
                     } header: {
                         // Header row
@@ -425,6 +471,11 @@ public struct AISDataGrid<Row>: View where Row: Identifiable & Hashable {
                 }
             }
             .background(tokens.surface)
+
+            // Paging controls (when enabled)
+            if pageable {
+                pagingControls
+            }
 
             // Footer with row count
             gridFooter
@@ -613,6 +664,99 @@ public struct AISDataGrid<Row>: View where Row: Identifiable & Hashable {
         .background(tokens.surfaceSecondary)
     }
 
+    // MARK: - Paging Controls
+
+    private var pagingControls: some View {
+        HStack(spacing: AISSpacing.md) {
+            // Page size picker
+            HStack(spacing: AISSpacing.sm) {
+                Text("Rows per page:")
+                    .font(.caption)
+                    .foregroundColor(tokens.onSurfaceSecondary)
+
+                Picker("", selection: $pageSize) {
+                    ForEach(pageSizeOptions, id: \.self) { size in
+                        Text("\(size)").tag(size)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 70)
+                .onChange(of: pageSize) {
+                    // Reset to first page when page size changes
+                    currentPage = 0
+                }
+            }
+
+            Spacer()
+
+            // Row range display
+            Text("Showing \(displayRange.start)-\(displayRange.end) of \(displayRange.total)")
+                .font(.caption)
+                .foregroundColor(tokens.onSurfaceSecondary)
+
+            // Page navigation buttons
+            HStack(spacing: AISSpacing.xs) {
+                // First page
+                Button {
+                    currentPage = 0
+                } label: {
+                    Image(systemName: "chevron.left.2")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .disabled(currentPage == 0)
+                .foregroundColor(currentPage == 0 ? tokens.onSurfaceSecondary.opacity(0.5) : tokens.actionPrimary.color)
+
+                // Previous page
+                Button {
+                    if currentPage > 0 {
+                        currentPage -= 1
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .disabled(currentPage == 0)
+                .foregroundColor(currentPage == 0 ? tokens.onSurfaceSecondary.opacity(0.5) : tokens.actionPrimary.color)
+
+                // Page indicator
+                Text("Page \(currentPage + 1) of \(totalPages)")
+                    .font(.caption)
+                    .foregroundColor(tokens.onSurface)
+                    .frame(minWidth: 80)
+
+                // Next page
+                Button {
+                    if currentPage < totalPages - 1 {
+                        currentPage += 1
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .disabled(currentPage >= totalPages - 1)
+                .foregroundColor(currentPage >= totalPages - 1 ? tokens.onSurfaceSecondary.opacity(0.5) : tokens.actionPrimary.color)
+
+                // Last page
+                Button {
+                    currentPage = totalPages - 1
+                } label: {
+                    Image(systemName: "chevron.right.2")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .disabled(currentPage >= totalPages - 1)
+                .foregroundColor(currentPage >= totalPages - 1 ? tokens.onSurfaceSecondary.opacity(0.5) : tokens.actionPrimary.color)
+            }
+        }
+        .padding(.horizontal, AISSpacing.md)
+        .padding(.vertical, AISSpacing.sm)
+        .background(tokens.surfaceSecondary)
+        .border(tokens.onSurface.opacity(0.1), width: 1)
+    }
+
     // MARK: - Helper Methods
 
     private func columnWidth(for column: AnyAISGridColumn<Row>) -> CGFloat {
@@ -718,11 +862,8 @@ public struct AnyAISGridColumn<Row>: Identifiable where Row: Identifiable {
         self.minWidth = column.minWidth
         self._displayValue = column.displayValue
 
-        // Store a comparator if the Value is Comparable
+        // Store a comparator - compare using display values as strings (works for all types)
         self._compare = { row1, row2 in
-            let value1 = column.rawValue(for: row1)
-            let value2 = column.rawValue(for: row2)
-            // Compare using display values as strings (works for all types)
             let str1 = column.displayValue(for: row1)
             let str2 = column.displayValue(for: row2)
             return str1.localizedCompare(str2)

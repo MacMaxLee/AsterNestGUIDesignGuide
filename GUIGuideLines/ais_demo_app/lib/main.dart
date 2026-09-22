@@ -10,6 +10,9 @@ import 'screens/navigation_demo_screen.dart';
 import 'screens/validation_demo_screen.dart';
 import 'screens/value_component_demo_screen.dart';
 import 'screens/data_grid_demo_screen.dart';
+import 'screens/autocomplete_demo_screen.dart';
+import 'screens/document_capture_demo_screen.dart';
+import 'screens/ai_settings_screen.dart';
 
 void main() {
   runApp(const AisDemoApp());
@@ -59,6 +62,14 @@ class AisDemoHome extends StatelessWidget {
       appBar: AppBar(
         title: const Text('AIS v1.0 Demo'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'AI Settings',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AISettingsScreen()),
+            ),
+          ),
           IconButton(
             icon: Icon(isDarkMode ? Icons.light_mode : Icons.dark_mode),
             tooltip: 'Toggle Theme',
@@ -237,6 +248,20 @@ class AisDemoHome extends StatelessWidget {
                   icon: Icons.grid_on_rounded,
                   color: tokens.stateInfo.color,
                   onTap: () => _navigate(context, const DataGridDemoScreen()),
+                ),
+                _DemoItem(
+                  title: 'Autocomplete',
+                  description: 'Type-ahead search with suggestions',
+                  icon: Icons.search_rounded,
+                  color: tokens.actionPrimary.color,
+                  onTap: () => _navigate(context, const AutocompleteDemoScreen()),
+                ),
+                _DemoItem(
+                  title: 'Document Capture',
+                  description: 'Integrated media picker + OCR scanner',
+                  icon: Icons.document_scanner_rounded,
+                  color: tokens.actionCaution.color,
+                  onTap: () => _navigate(context, const DocumentCaptureDemoScreen()),
                 ),
               ],
             ),

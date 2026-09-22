@@ -59,7 +59,7 @@ class AisTheme {
         onSurface: tokens.onSurface,
       ),
       scaffoldBackgroundColor: tokens.surfaceSecondary,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: tokens.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -130,7 +130,7 @@ class AisTheme {
         onSurface: tokens.onSurface,
       ),
       scaffoldBackgroundColor: tokens.surfaceSecondary,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: tokens.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(

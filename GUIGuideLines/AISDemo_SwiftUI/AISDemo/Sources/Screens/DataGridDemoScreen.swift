@@ -7,6 +7,15 @@
 // Demonstrates the AISDataGrid component with sorting, filtering, selection,
 // and inline editing capabilities. Shows C-35 and C-36 conformance.
 //
+// EDITING MODES:
+// 1. Inline editing - Double-click any editable cell to edit in place
+//    - Columns with isEditable: true support this
+//    - Press Enter to commit, Escape to cancel
+//
+// 2. Dialog editing - Click "Edit" button for full record editing
+//    - Better for complex fields (toggles, dates, relationships)
+//    - Shows ProductEditSheet modal
+//
 // =============================================================================
 
 import SwiftUI
@@ -55,38 +64,49 @@ struct DataGridDemoScreen: View {
 
     private var columns: [AnyAISGridColumn<Product>] {
         [
+            // Editable text column - double-click to edit inline
             AISGridColumn(
                 id: "name",
                 title: "Product Name",
                 keyPath: \Product.name,
+                isEditable: true,  // Enable inline editing
                 initialWidth: 150
             ).erased(),
 
+            // Editable category column
             AISGridColumn(
                 id: "category",
                 title: "Category",
                 keyPath: \Product.category,
+                isEditable: true,  // Enable inline editing
                 initialWidth: 120
             ).erased(),
 
+            // Editable price column with formatter and parser
             AISGridColumn(
                 id: "price",
                 title: "Price",
                 keyPath: \Product.price,
                 formatter: { String(format: "$%.2f", $0) },
+                isEditable: true,  // Enable inline editing
+                parser: { Double($0.replacingOccurrences(of: "$", with: "").replacingOccurrences(of: ",", with: "")) },
                 alignment: .trailing,
                 initialWidth: 100
             ).erased(),
 
+            // Editable quantity column
             AISGridColumn(
                 id: "quantity",
                 title: "Qty",
                 keyPath: \Product.quantity,
                 formatter: { "\($0)" },
+                isEditable: true,  // Enable inline editing
+                parser: { Int($0) },
                 alignment: .trailing,
                 initialWidth: 80
             ).erased(),
 
+            // Non-editable status column (use dialog for complex toggles)
             AISGridColumn(
                 id: "status",
                 title: "Status",
@@ -95,6 +115,7 @@ struct DataGridDemoScreen: View {
                 initialWidth: 100
             ).erased(),
 
+            // Non-editable date column
             AISGridColumn(
                 id: "updated",
                 title: "Last Updated",
@@ -191,16 +212,28 @@ struct DataGridDemoScreen: View {
 
             Spacer()
 
-            // Selection info
+            // Selection info and actions
             if !selectedProducts.isEmpty {
                 Text("\(selectedProducts.count) selected")
                     .font(.caption)
                     .foregroundColor(tokens.onSurfaceSecondary)
 
+                // Edit button - opens dialog for selected product
+                if selectedProducts.count == 1 {
+                    AISButton("Edit", type: .secondary, size: .small) {
+                        editSelectedProduct()
+                    }
+                }
+
                 AISButton("Delete Selected", type: .destructive, size: .small) {
                     deleteSelected()
                 }
             }
+
+            // Hint about inline editing
+            Text("Double-click cells to edit inline")
+                .font(.caption2)
+                .foregroundColor(tokens.onSurfaceSecondary)
 
             // Add button
             AISButton("Add Product", type: .primary, size: .small) {
@@ -215,6 +248,13 @@ struct DataGridDemoScreen: View {
     private func deleteSelected() {
         products.removeAll { selectedProducts.contains($0.id) }
         selectedProducts.removeAll()
+    }
+
+    private func editSelectedProduct() {
+        guard let selectedId = selectedProducts.first,
+              let product = products.first(where: { $0.id == selectedId }) else { return }
+        editingProduct = product
+        showEditSheet = true
     }
 
     private func addNewProduct() {

@@ -21,6 +21,10 @@ import {
   Search,
   X,
   Download,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { useAISTokens } from '../core/AISProvider';
 import { AISButton } from './AISButton';
@@ -89,6 +93,12 @@ export interface AISDataGridProps<T extends { id: string | number }> {
   className?: string;
   /** Max height (enables virtualization feel) */
   maxHeight?: number | string;
+  /** Enable paging */
+  pageable?: boolean;
+  /** Page size options */
+  pageSizeOptions?: number[];
+  /** Default page size */
+  defaultPageSize?: number;
 }
 
 // =============================================================================
@@ -137,6 +147,9 @@ export function AISDataGrid<T extends { id: string | number }>({
   onCellEdit,
   className,
   maxHeight = '600px',
+  pageable = false,
+  pageSizeOptions = [10, 25, 50, 100],
+  defaultPageSize = 25,
 }: AISDataGridProps<T>) {
   const tokens = useAISTokens();
 
@@ -146,8 +159,17 @@ export function AISDataGrid<T extends { id: string | number }>({
   const [editingCell, setEditingCell] = useState<{ rowId: string | number; columnId: string } | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const [focusedCell, setFocusedCell] = useState<{ row: number; col: number } | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(defaultPageSize);
 
   const gridRef = useRef<HTMLDivElement>(null);
+
+  // Reset focus when page changes to avoid stale row references
+  useEffect(() => {
+    setFocusedCell(null);
+    setEditingCell(null);
+    setEditValue('');
+  }, [currentPage, pageSize]);
 
   // Filter and sort data
   const processedData = useMemo(() => {
@@ -198,6 +220,27 @@ export function AISDataGrid<T extends { id: string | number }>({
 
     return result;
   }, [data, columns, searchText, filters, sortStates]);
+
+  // Paging calculations
+  const totalPages = useMemo(() => {
+    if (!pageable || pageSize <= 0) return 1;
+    return Math.max(1, Math.ceil(processedData.length / pageSize));
+  }, [pageable, pageSize, processedData.length]);
+
+  const pagedData = useMemo(() => {
+    if (!pageable) return processedData;
+    const startIndex = currentPage * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, processedData.length);
+    return processedData.slice(startIndex, endIndex);
+  }, [pageable, currentPage, pageSize, processedData]);
+
+  const displayRange = useMemo(() => {
+    const total = processedData.length;
+    if (!pageable) return { start: 1, end: total, total };
+    const start = currentPage * pageSize + 1;
+    const end = Math.min((currentPage + 1) * pageSize, total);
+    return { start, end, total };
+  }, [pageable, currentPage, pageSize, processedData.length]);
 
   // Handle column sort click
   const handleSort = useCallback((columnId: string) => {
@@ -285,7 +328,9 @@ export function AISDataGrid<T extends { id: string | number }>({
       if (!focusedCell) return;
 
       const { row, col } = focusedCell;
-      const maxRow = processedData.length - 1;
+      // Use pagedData for row navigation when paging is enabled
+      const displayData = pageable ? pagedData : processedData;
+      const maxRow = displayData.length - 1;
       const maxCol = columns.length - 1 + (showRowNumbers ? 1 : 0);
 
       switch (e.key) {
@@ -307,18 +352,27 @@ export function AISDataGrid<T extends { id: string | number }>({
           break;
         case 'Tab':
           if (e.shiftKey) {
-            if (col > 0) setFocusedCell({ row, col: col - 1 });
-            else if (row > 0) setFocusedCell({ row: row - 1, col: maxCol });
+            // Shift+Tab: move to previous cell
+            if (col > 0) {
+              setFocusedCell({ row, col: col - 1 });
+            } else if (row > 0) {
+              setFocusedCell({ row: row - 1, col: maxCol });
+            }
           } else {
-            if (col < maxCol) setFocusedCell({ row, col: col + 1 });
-            else if (row < maxRow) setFocusedCell({ row: row + 1, col: 0 });
+            // Tab: move to next cell
+            if (col < maxCol) {
+              setFocusedCell({ row, col: col + 1 });
+            } else if (row < maxRow) {
+              setFocusedCell({ row: row + 1, col: 0 });
+            }
           }
           e.preventDefault();
           break;
         case 'Enter':
         case 'F2':
           if (!editingCell) {
-            const dataRow = processedData[row];
+            // Use displayData (pagedData when paging) for editing
+            const dataRow = displayData[row];
             const columnIndex = showRowNumbers ? col - 1 : col;
             const column = columns[columnIndex];
             if (column?.editable && dataRow) {
@@ -341,7 +395,7 @@ export function AISDataGrid<T extends { id: string | number }>({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [focusedCell, processedData, columns, showRowNumbers, editingCell, startEditing, commitEdit, cancelEdit]);
+  }, [focusedCell, processedData, pagedData, pageable, columns, showRowNumbers, editingCell, startEditing, commitEdit, cancelEdit]);
 
   // Export to CSV
   const exportToCSV = useCallback(() => {
@@ -523,8 +577,9 @@ export function AISDataGrid<T extends { id: string | number }>({
 
           {/* Body */}
           <tbody>
-            {processedData.map((row, rowIndex) => {
+            {pagedData.map((row, rowIndex) => {
               const isSelected = selection.has(row.id);
+              const actualRowIndex = pageable ? currentPage * pageSize + rowIndex : rowIndex;
 
               return (
                 <tr
@@ -548,7 +603,7 @@ export function AISDataGrid<T extends { id: string | number }>({
                         borderColor: tokens.onSurfaceSecondary + '10',
                       }}
                     >
-                      {rowIndex + 1}
+                      {actualRowIndex + 1}
                     </td>
                   )}
                   {columns.map((column, colIndex) => {
@@ -612,7 +667,7 @@ export function AISDataGrid<T extends { id: string | number }>({
         </table>
 
         {/* Empty state */}
-        {processedData.length === 0 && (
+        {pagedData.length === 0 && (
           <div
             className="flex flex-col items-center justify-center py-12"
             style={{ color: tokens.onSurfaceSecondary }}
@@ -627,6 +682,91 @@ export function AISDataGrid<T extends { id: string | number }>({
           </div>
         )}
       </div>
+
+      {/* Paging Controls */}
+      {pageable && (
+        <div
+          className="flex items-center justify-between px-4 py-2 border-t"
+          style={{
+            backgroundColor: tokens.surfaceSecondary,
+            borderColor: tokens.onSurfaceSecondary + '20',
+          }}
+        >
+          {/* Page size selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: tokens.onSurfaceSecondary }}>
+              Rows per page:
+            </span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(0);
+              }}
+              className="px-2 py-1 text-xs rounded border"
+              style={{
+                backgroundColor: tokens.surface,
+                borderColor: tokens.onSurfaceSecondary + '30',
+                color: tokens.onSurface,
+              }}
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Range display */}
+          <span className="text-xs" style={{ color: tokens.onSurfaceSecondary }}>
+            Showing {displayRange.start}-{displayRange.end} of {displayRange.total}
+          </span>
+
+          {/* Navigation buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(0)}
+              disabled={currentPage === 0}
+              className="p-1 rounded hover:bg-opacity-10 disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{ color: currentPage === 0 ? tokens.onSurfaceSecondary : tokens.actionPrimary.color }}
+              title="First page"
+            >
+              <ChevronsLeft size={16} />
+            </button>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="p-1 rounded hover:bg-opacity-10 disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{ color: currentPage === 0 ? tokens.onSurfaceSecondary : tokens.actionPrimary.color }}
+              title="Previous page"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="px-2 text-xs" style={{ color: tokens.onSurface }}>
+              Page {currentPage + 1} of {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              className="p-1 rounded hover:bg-opacity-10 disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{ color: currentPage >= totalPages - 1 ? tokens.onSurfaceSecondary : tokens.actionPrimary.color }}
+              title="Next page"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages - 1)}
+              disabled={currentPage >= totalPages - 1}
+              className="p-1 rounded hover:bg-opacity-10 disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{ color: currentPage >= totalPages - 1 ? tokens.onSurfaceSecondary : tokens.actionPrimary.color }}
+              title="Last page"
+            >
+              <ChevronsRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

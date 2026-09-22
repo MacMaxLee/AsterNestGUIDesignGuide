@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { AISProvider } from '../core/AISProvider';
 import { ButtonDemo } from './demos/ButtonDemo';
 import { StateBadgeDemo } from './demos/StateBadgeDemo';
 import { ValueComponentDemo } from './demos/ValueComponentDemo';
 import { ErrorHandlingDemo } from './demos/ErrorHandlingDemo';
 import { DataGridDemo } from './demos/DataGridDemo';
+import { AutocompleteDemo } from './demos/AutocompleteDemo';
 import MediaPickerDemo from './demos/MediaPickerDemo';
 import GridLayoutDemo from './demos/GridLayoutDemo';
+import DocScanDemo from './demos/DocScanDemo';
+import AISettingsDemo from './demos/AISettingsDemo';
 import {
   Palette,
   BadgeCheck,
@@ -17,6 +20,9 @@ import {
   Sun,
   Upload,
   LayoutGrid,
+  Search,
+  FileText,
+  Settings,
 } from 'lucide-react';
 
 type DemoSection =
@@ -25,8 +31,11 @@ type DemoSection =
   | 'values'
   | 'errors'
   | 'grid'
+  | 'autocomplete'
   | 'media'
-  | 'layout';
+  | 'layout'
+  | 'docscan'
+  | 'aisettings';
 
 interface NavItemProps {
   id: DemoSection;
@@ -65,8 +74,11 @@ export function App() {
     { id: 'values', label: 'Value Components', icon: <Hash size={20} /> },
     { id: 'errors', label: 'Error Handling', icon: <AlertCircle size={20} /> },
     { id: 'grid', label: 'Data Grid', icon: <Table size={20} /> },
+    { id: 'autocomplete', label: 'Autocomplete', icon: <Search size={20} /> },
     { id: 'media', label: 'Media Picker', icon: <Upload size={20} /> },
     { id: 'layout', label: 'Grid Layout', icon: <LayoutGrid size={20} /> },
+    { id: 'docscan', label: 'Document Scan', icon: <FileText size={20} /> },
+    { id: 'aisettings', label: 'AI Settings', icon: <Settings size={20} /> },
   ];
 
   const renderContent = () => {
@@ -81,10 +93,16 @@ export function App() {
         return <ErrorHandlingDemo />;
       case 'grid':
         return <DataGridDemo />;
+      case 'autocomplete':
+        return <AutocompleteDemo />;
       case 'media':
         return <MediaPickerDemo />;
       case 'layout':
         return <GridLayoutDemo />;
+      case 'docscan':
+        return <DocScanDemo />;
+      case 'aisettings':
+        return <AISettingsDemo />;
       default:
         return <ButtonDemo />;
     }

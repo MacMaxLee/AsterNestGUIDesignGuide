@@ -37,6 +37,10 @@ import UniformTypeIdentifiers
 import CryptoKit
 #if os(macOS)
 import AppKit
+import AVFoundation
+#elseif os(iOS)
+import UIKit
+import AVFoundation
 #endif
 
 // MARK: - File Info Protocol
@@ -135,6 +139,57 @@ public struct AISFileInfo: AISFileInfoProtocol {
 }
 
 // MARK: - File Type Category
+
+/// Input sources for file selection.
+/// Defines how users can provide files to the picker.
+public enum AISInputSource: CaseIterable, Identifiable {
+    /// Select files from the file system
+    case files
+
+    /// Capture image from camera (iOS/macOS with camera)
+    case camera
+
+    /// Paste image from clipboard
+    case clipboard
+
+    public var id: String { displayName }
+
+    /// Human-readable display name
+    public var displayName: String {
+        switch self {
+        case .files: return "Browse Files"
+        case .camera: return "Camera"
+        case .clipboard: return "Paste"
+        }
+    }
+
+    /// SF Symbol icon name
+    public var iconName: String {
+        switch self {
+        case .files: return "folder"
+        case .camera: return "camera"
+        case .clipboard: return "doc.on.clipboard"
+        }
+    }
+
+    /// Check if this source is available on the current platform
+    public var isAvailable: Bool {
+        switch self {
+        case .files:
+            return true
+        case .camera:
+            #if os(iOS)
+            return UIImagePickerController.isSourceTypeAvailable(.camera)
+            #elseif os(macOS)
+            return AVCaptureDevice.default(for: .video) != nil
+            #else
+            return false
+            #endif
+        case .clipboard:
+            return true
+        }
+    }
+}
 
 /// Categories of files that can be selected.
 /// Maps to UTType for consistent type identification.
@@ -313,6 +368,9 @@ public struct AISMediaPicker: View {
     /// Allowed file type categories
     let allowedTypes: [AISFileCategory]
 
+    /// Allowed input sources (files, camera, clipboard)
+    let inputSources: [AISInputSource]
+
     /// Whether multiple files can be selected
     let allowsMultiple: Bool
 
@@ -331,6 +389,12 @@ public struct AISMediaPicker: View {
     /// Button type for styling
     let buttonType: AISButtonType
 
+    /// Show input source selector (when multiple sources available)
+    let showSourceSelector: Bool
+
+    /// Enable built-in review mode before confirming selection
+    let enableReview: Bool
+
     // MARK: - Environment
 
     @Environment(\.aisTokens) private var tokens
@@ -338,7 +402,15 @@ public struct AISMediaPicker: View {
     // MARK: - State
 
     @State private var showFilePicker = false
+    @State private var showCamera = false
+    @State private var showSourceMenu = false
     @State private var processingProgress: Double = 0
+    @State private var clipboardHasImage = false
+
+    // Review mode state
+    @State private var pendingFiles: [AISFileInfo] = []
+    @State private var showReviewPanel = false
+    @State private var selectedFileForPreview: AISFileInfo?
 
     // MARK: - Initialization
 
@@ -347,42 +419,84 @@ public struct AISMediaPicker: View {
     /// - Parameters:
     ///   - state: Binding to track picker state
     ///   - allowedTypes: Array of allowed file categories (default: [.any])
+    ///   - inputSources: Array of allowed input sources (default: [.files, .clipboard])
     ///   - allowsMultiple: Whether multiple selection is allowed (default: true)
     ///   - maxFileSize: Maximum file size in bytes (default: nil)
     ///   - buttonLabel: Custom button text (default: "Select Files")
     ///   - buttonType: Semantic button type (default: .primary)
+    ///   - showSourceSelector: Show source selection UI (default: true)
+    ///   - enableReview: Show review panel before confirming (default: false)
     ///   - onFilesSelected: Callback with selected file infos
     ///   - onError: Optional error callback
     ///
     public init(
         state: Binding<AISFilePickerState> = .constant(.idle),
         allowedTypes: [AISFileCategory] = [.any],
+        inputSources: [AISInputSource] = [.files, .clipboard],
         allowsMultiple: Bool = true,
         maxFileSize: Int64? = nil,
         buttonLabel: String = "Select Files",
         buttonType: AISButtonType = .primary,
+        showSourceSelector: Bool = true,
+        enableReview: Bool = false,
         onFilesSelected: @escaping ([AISFileInfo]) -> Void,
         onError: ((AISFilePickerError) -> Void)? = nil
     ) {
         self._state = state
         self.allowedTypes = allowedTypes
+        self.inputSources = inputSources
         self.allowsMultiple = allowsMultiple
         self.maxFileSize = maxFileSize
         self.buttonLabel = buttonLabel
         self.buttonType = buttonType
+        self.showSourceSelector = showSourceSelector
+        self.enableReview = enableReview
         self.onFilesSelected = onFilesSelected
         self.onError = onError
+    }
+
+    /// Available input sources based on configuration and platform
+    private var availableSources: [AISInputSource] {
+        inputSources.filter { $0.isAvailable }
     }
 
     // MARK: - Body
 
     public var body: some View {
         VStack(alignment: .leading, spacing: AISSpacing.md) {
+            // Review header (when files are pending)
+            if enableReview && !pendingFiles.isEmpty {
+                reviewHeader
+            }
+
+            // Source selector (if multiple sources available)
+            if showSourceSelector && availableSources.count > 1 {
+                sourceSelector
+            }
+
             // Picker button with state-aware content
             pickerButton
 
-            // State indicator
-            stateIndicator
+            // Review panel (when enabled and files pending)
+            if enableReview && showReviewPanel && !pendingFiles.isEmpty {
+                reviewPanel
+            }
+
+            // Review action buttons
+            if enableReview && !pendingFiles.isEmpty {
+                reviewActionButtons
+            }
+
+            // State indicator (only when not in review mode or no pending files)
+            if !enableReview || pendingFiles.isEmpty {
+                stateIndicator
+            }
+        }
+        .onAppear {
+            checkClipboardContent()
+        }
+        .sheet(item: $selectedFileForPreview) { file in
+            filePreviewSheet(file)
         }
         #if os(iOS)
         .fileImporter(
@@ -391,7 +505,267 @@ public struct AISMediaPicker: View {
             allowsMultipleSelection: allowsMultiple,
             onCompletion: handleFileSelection
         )
+        .sheet(isPresented: $showCamera) {
+            CameraCapture { image in
+                Task {
+                    await processImage(image, source: "camera")
+                }
+            }
+        }
         #endif
+    }
+
+    // MARK: - Review Header
+
+    private var reviewHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Selected Files")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color(tokens.onSurface))
+
+                Text("\(pendingFiles.count) file(s) ready for review")
+                    .font(.caption)
+                    .foregroundColor(Color(tokens.onSurfaceSecondary))
+            }
+
+            Spacer()
+
+            Button {
+                withAnimation {
+                    showReviewPanel.toggle()
+                }
+            } label: {
+                Image(systemName: showReviewPanel ? "chevron.up" : "chevron.down")
+                    .foregroundColor(Color(tokens.onSurfaceSecondary))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(AISSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: AISRadius.md)
+                .fill(Color(tokens.surfaceSecondary))
+        )
+    }
+
+    // MARK: - Review Panel
+
+    private var reviewPanel: some View {
+        VStack(spacing: AISSpacing.sm) {
+            ForEach(pendingFiles) { file in
+                reviewFileRow(file)
+            }
+        }
+        .padding(AISSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: AISRadius.lg)
+                .fill(Color(tokens.surfaceSecondary))
+        )
+    }
+
+    private func reviewFileRow(_ file: AISFileInfo) -> some View {
+        HStack(spacing: AISSpacing.md) {
+            // Thumbnail or icon
+            filePreviewThumbnail(file)
+                .frame(width: 50, height: 50)
+                .cornerRadius(AISRadius.sm)
+                .onTapGesture {
+                    selectedFileForPreview = file
+                }
+
+            // File info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(file.fileName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(Color(tokens.onSurface))
+                    .lineLimit(1)
+
+                HStack(spacing: AISSpacing.xs) {
+                    Text(ByteCountFormatter.string(fromByteCount: file.fileSize, countStyle: .file))
+                        .font(.caption)
+                        .foregroundColor(Color(tokens.onSurfaceSecondary))
+
+                    Text("•")
+                        .font(.caption)
+                        .foregroundColor(Color(tokens.onSurfaceSecondary))
+
+                    Text(file.mimeType)
+                        .font(.caption)
+                        .foregroundColor(Color(tokens.onSurfaceSecondary))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            // Preview button
+            Button {
+                selectedFileForPreview = file
+            } label: {
+                Image(systemName: "eye")
+                    .font(.caption)
+                    .foregroundColor(Color(tokens.actionPrimary.color))
+            }
+            .buttonStyle(.plain)
+
+            // Remove button
+            Button {
+                withAnimation {
+                    pendingFiles.removeAll { $0.id == file.id }
+                    if pendingFiles.isEmpty {
+                        showReviewPanel = false
+                    }
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(Color(tokens.stateError.color).opacity(0.7))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(AISSpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: AISRadius.sm)
+                .fill(Color(tokens.surface))
+        )
+    }
+
+    @ViewBuilder
+    private func filePreviewThumbnail(_ file: AISFileInfo) -> some View {
+        if file.mimeType.hasPrefix("image/") {
+            AsyncImageThumbnail(file: file)
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: AISRadius.sm)
+                    .fill(Color(tokens.actionPrimary.color).opacity(0.1))
+
+                Image(systemName: thumbnailIconForMimeType(file.mimeType))
+                    .font(.title3)
+                    .foregroundColor(Color(tokens.actionPrimary.color))
+            }
+        }
+    }
+
+    private func thumbnailIconForMimeType(_ mimeType: String) -> String {
+        if mimeType.hasPrefix("image/") { return "photo" }
+        if mimeType.hasPrefix("video/") { return "video" }
+        if mimeType.hasPrefix("audio/") { return "music.note" }
+        if mimeType == "application/pdf" { return "doc.text" }
+        if mimeType.hasPrefix("text/") { return "doc.plaintext" }
+        return "doc"
+    }
+
+    // MARK: - Review Action Buttons
+
+    private var reviewActionButtons: some View {
+        HStack(spacing: AISSpacing.md) {
+            // Clear all button
+            Button {
+                withAnimation {
+                    pendingFiles.removeAll()
+                    showReviewPanel = false
+                }
+            } label: {
+                HStack(spacing: AISSpacing.xs) {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                    Text("Clear All")
+                        .font(.subheadline)
+                }
+                .foregroundColor(Color(tokens.stateError.color))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            // Confirm button
+            AISButton("Confirm (\(pendingFiles.count))", type: .confirm, icon: "checkmark") {
+                onFilesSelected(pendingFiles)
+                state = .completed(pendingFiles)
+                withAnimation {
+                    pendingFiles.removeAll()
+                    showReviewPanel = false
+                }
+            }
+        }
+    }
+
+    // MARK: - File Preview Sheet
+
+    private func filePreviewSheet(_ file: AISFileInfo) -> some View {
+        NavigationStack {
+            ScrollView {
+                AISFileInfoDetailView(file: file)
+                    .padding(AISSpacing.lg)
+            }
+            .background(Color(tokens.surface))
+            .navigationTitle("File Preview")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        selectedFileForPreview = nil
+                    }
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 500, minHeight: 600)
+        #endif
+    }
+
+    // MARK: - Source Selector
+
+    @ViewBuilder
+    private var sourceSelector: some View {
+        HStack(spacing: AISSpacing.sm) {
+            ForEach(availableSources) { source in
+                sourceButton(for: source)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sourceButton(for source: AISInputSource) -> some View {
+        Button {
+            handleSourceSelection(source)
+        } label: {
+            HStack(spacing: AISSpacing.xs) {
+                Image(systemName: source.iconName)
+                    .font(.caption)
+                Text(source.displayName)
+                    .font(.caption)
+            }
+            .padding(.horizontal, AISSpacing.sm)
+            .padding(.vertical, AISSpacing.xs)
+            .background(tokens.surfaceSecondary)
+            .foregroundColor(
+                source == .clipboard && !clipboardHasImage && allowedTypes.contains(.image)
+                    ? tokens.onSurfaceSecondary.opacity(0.5)
+                    : tokens.onSurface
+            )
+            .cornerRadius(AISRadius.sm)
+        }
+        .buttonStyle(.plain)
+        .disabled(source == .clipboard && !clipboardHasImage && allowedTypes.contains(.image))
+    }
+
+    private func handleSourceSelection(_ source: AISInputSource) {
+        switch source {
+        case .files:
+            openFilePicker()
+        case .camera:
+            #if os(iOS)
+            showCamera = true
+            #elseif os(macOS)
+            openMacCamera()
+            #endif
+        case .clipboard:
+            pasteFromClipboard()
+        }
     }
 
     // MARK: - Picker Button
@@ -585,8 +959,18 @@ public struct AISMediaPicker: View {
 
         // Report results
         if !fileInfos.isEmpty {
-            state = .completed(fileInfos)
-            onFilesSelected(fileInfos)
+            if enableReview {
+                // In review mode, add to pending files instead of calling callback
+                withAnimation {
+                    pendingFiles.append(contentsOf: fileInfos)
+                    showReviewPanel = true
+                }
+                state = .idle
+            } else {
+                // Normal mode - directly call callback
+                state = .completed(fileInfos)
+                onFilesSelected(fileInfos)
+            }
         } else if let firstError = errors.first {
             state = .error(firstError)
             onError?(firstError)
@@ -634,7 +1018,299 @@ public struct AISMediaPicker: View {
         let digest = Insecure.MD5.hash(data: data)
         return digest.map { String(format: "%02hhx", $0) }.joined()
     }
+
+    // MARK: - Clipboard Handling
+
+    /// Check if clipboard contains image content
+    private func checkClipboardContent() {
+        #if os(macOS)
+        let pasteboard = NSPasteboard.general
+        clipboardHasImage = pasteboard.canReadItem(withDataConformingToTypes: NSImage.imageTypes)
+            || pasteboard.canReadItem(withDataConformingToTypes: [UTType.fileURL.identifier])
+        #elseif os(iOS)
+        clipboardHasImage = UIPasteboard.general.hasImages || UIPasteboard.general.hasURLs
+        #endif
+    }
+
+    /// Paste content from clipboard
+    private func pasteFromClipboard() {
+        #if os(macOS)
+        let pasteboard = NSPasteboard.general
+
+        // Try to get image from clipboard
+        if let image = NSImage(pasteboard: pasteboard) {
+            Task {
+                await processNSImage(image)
+            }
+            return
+        }
+
+        // Try to get file URLs from clipboard
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+            Task {
+                await processFiles(urls)
+            }
+            return
+        }
+
+        // Try to get text/PDF data
+        if let data = pasteboard.data(forType: .pdf) {
+            Task {
+                await processPastedData(data, mimeType: "application/pdf", extension: "pdf")
+            }
+            return
+        }
+
+        if let string = pasteboard.string(forType: .string) {
+            Task {
+                await processPastedText(string)
+            }
+            return
+        }
+
+        state = .error(.unknown("No compatible content found in clipboard"))
+        onError?(.unknown("No compatible content found in clipboard"))
+        #elseif os(iOS)
+        let pasteboard = UIPasteboard.general
+
+        // Try to get image
+        if let image = pasteboard.image {
+            Task {
+                await processImage(image, source: "clipboard")
+            }
+            return
+        }
+
+        // Try to get file URLs
+        if let urls = pasteboard.urls {
+            Task {
+                await processFiles(urls)
+            }
+            return
+        }
+
+        // Try to get text
+        if let string = pasteboard.string {
+            Task {
+                await processPastedText(string)
+            }
+            return
+        }
+
+        state = .error(.unknown("No compatible content found in clipboard"))
+        onError?(.unknown("No compatible content found in clipboard"))
+        #endif
+    }
+
+    #if os(macOS)
+    /// Process NSImage from clipboard
+    @MainActor
+    private func processNSImage(_ image: NSImage) async {
+        state = .processing(progress: 0.5)
+
+        guard let tiffData = image.tiffRepresentation,
+              let bitmapRep = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
+            state = .error(.readError("clipboard_image"))
+            onError?(.readError("clipboard_image"))
+            return
+        }
+
+        // Check file size
+        if let maxSize = maxFileSize, Int64(pngData.count) > maxSize {
+            state = .error(.fileTooLarge("clipboard_image.png", Int64(pngData.count)))
+            onError?(.fileTooLarge("clipboard_image.png", Int64(pngData.count)))
+            return
+        }
+
+        let checksum = computeMD5(data: pngData)
+        let fileName = "clipboard_image_\(Date().timeIntervalSince1970).png"
+
+        // Save to temp directory for path reference
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        try? pngData.write(to: tempURL)
+
+        let fileInfo = AISFileInfo(
+            fileName: fileName,
+            mimeType: "image/png",
+            fileSize: Int64(pngData.count),
+            checksum: checksum,
+            localPath: tempURL.path,
+            createdAt: Date(),
+            modifiedAt: Date(),
+            metadata: ["source": "clipboard"]
+        )
+
+        state = .completed([fileInfo])
+        onFilesSelected([fileInfo])
+    }
+
+    /// Open macOS camera (if available)
+    private func openMacCamera() {
+        // macOS camera integration would require AVCaptureSession setup
+        // For now, fallback to file picker
+        state = .error(.unknown("Camera capture not yet implemented for macOS"))
+        onError?(.unknown("Camera capture not yet implemented for macOS"))
+    }
+    #endif
+
+    #if os(iOS)
+    /// Process UIImage from camera or clipboard
+    @MainActor
+    private func processImage(_ image: UIImage, source: String) async {
+        state = .processing(progress: 0.5)
+
+        guard let pngData = image.pngData() else {
+            state = .error(.readError("\(source)_image"))
+            onError?(.readError("\(source)_image"))
+            return
+        }
+
+        // Check file size
+        if let maxSize = maxFileSize, Int64(pngData.count) > maxSize {
+            state = .error(.fileTooLarge("\(source)_image.png", Int64(pngData.count)))
+            onError?(.fileTooLarge("\(source)_image.png", Int64(pngData.count)))
+            return
+        }
+
+        let checksum = computeMD5(data: pngData)
+        let fileName = "\(source)_image_\(Date().timeIntervalSince1970).png"
+
+        // Save to temp directory
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        try? pngData.write(to: tempURL)
+
+        let fileInfo = AISFileInfo(
+            fileName: fileName,
+            mimeType: "image/png",
+            fileSize: Int64(pngData.count),
+            checksum: checksum,
+            localPath: tempURL.path,
+            createdAt: Date(),
+            modifiedAt: Date(),
+            metadata: ["source": source]
+        )
+
+        state = .completed([fileInfo])
+        onFilesSelected([fileInfo])
+    }
+    #endif
+
+    /// Process pasted data (PDF, etc.)
+    @MainActor
+    private func processPastedData(_ data: Data, mimeType: String, extension ext: String) async {
+        state = .processing(progress: 0.5)
+
+        // Check file size
+        if let maxSize = maxFileSize, Int64(data.count) > maxSize {
+            state = .error(.fileTooLarge("pasted_file.\(ext)", Int64(data.count)))
+            onError?(.fileTooLarge("pasted_file.\(ext)", Int64(data.count)))
+            return
+        }
+
+        let checksum = computeMD5(data: data)
+        let fileName = "pasted_\(Date().timeIntervalSince1970).\(ext)"
+
+        // Save to temp directory
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        try? data.write(to: tempURL)
+
+        let fileInfo = AISFileInfo(
+            fileName: fileName,
+            mimeType: mimeType,
+            fileSize: Int64(data.count),
+            checksum: checksum,
+            localPath: tempURL.path,
+            createdAt: Date(),
+            modifiedAt: Date(),
+            metadata: ["source": "clipboard"]
+        )
+
+        state = .completed([fileInfo])
+        onFilesSelected([fileInfo])
+    }
+
+    /// Process pasted text content
+    @MainActor
+    private func processPastedText(_ text: String) async {
+        state = .processing(progress: 0.5)
+
+        let data = Data(text.utf8)
+
+        // Check file size
+        if let maxSize = maxFileSize, Int64(data.count) > maxSize {
+            state = .error(.fileTooLarge("pasted_text.txt", Int64(data.count)))
+            onError?(.fileTooLarge("pasted_text.txt", Int64(data.count)))
+            return
+        }
+
+        let checksum = computeMD5(data: data)
+        let fileName = "pasted_text_\(Date().timeIntervalSince1970).txt"
+
+        // Save to temp directory
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        try? data.write(to: tempURL)
+
+        let fileInfo = AISFileInfo(
+            fileName: fileName,
+            mimeType: "text/plain",
+            fileSize: Int64(data.count),
+            checksum: checksum,
+            localPath: tempURL.path,
+            createdAt: Date(),
+            modifiedAt: Date(),
+            metadata: ["source": "clipboard"]
+        )
+
+        state = .completed([fileInfo])
+        onFilesSelected([fileInfo])
+    }
 }
+
+// MARK: - Camera Capture View (iOS)
+
+#if os(iOS)
+import UIKit
+
+struct CameraCapture: UIViewControllerRepresentable {
+    let onImageCaptured: (UIImage) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImageCaptured: onImageCaptured)
+    }
+
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onImageCaptured: (UIImage) -> Void
+
+        init(onImageCaptured: @escaping (UIImage) -> Void) {
+            self.onImageCaptured = onImageCaptured
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            picker.dismiss(animated: true)
+            if let image = info[.originalImage] as? UIImage {
+                onImageCaptured(image)
+            }
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            picker.dismiss(animated: true)
+        }
+    }
+}
+#endif
 
 // MARK: - File Info Row View
 
@@ -733,7 +1409,8 @@ public struct AISFileInfoRow: View {
 
 // MARK: - File Info Detail View
 
-/// A detailed view showing complete file metadata.
+/// A detailed view showing complete file metadata with preview support.
+/// For images, displays a visual preview. For other files, shows an icon.
 /// Useful for displaying file information before saving to database.
 ///
 /// ## Example
@@ -745,19 +1422,44 @@ public struct AISFileInfoDetailView: View {
     let file: AISFileInfo
 
     @Environment(\.aisTokens) private var tokens
+    @State private var previewImage: AISImageType?
+    @State private var loadError: String?
 
     public init(file: AISFileInfo) {
         self.file = file
     }
 
+    /// Check if file is an image type
+    private var isImage: Bool {
+        file.mimeType.hasPrefix("image/")
+    }
+
+    /// Check if file is a PDF
+    private var isPDF: Bool {
+        file.mimeType == "application/pdf"
+    }
+
+    /// SF Symbol for file type
+    private var fileIcon: String {
+        if isImage { return "photo" }
+        if isPDF { return "doc.text" }
+        if file.mimeType.hasPrefix("video/") { return "video" }
+        if file.mimeType.hasPrefix("audio/") { return "music.note" }
+        if file.mimeType.hasPrefix("text/") { return "doc.plaintext" }
+        return "doc"
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: AISSpacing.md) {
+            // File Preview Section
+            previewSection
+
+            Divider()
+
             // Header
             Text("File Details")
                 .font(.headline)
                 .foregroundColor(tokens.onSurface)
-
-            Divider()
 
             // Metadata rows
             Group {
@@ -779,6 +1481,116 @@ public struct AISFileInfoDetailView: View {
         .padding(AISSpacing.md)
         .background(tokens.surfaceSecondary)
         .cornerRadius(AISRadius.md)
+        .onAppear {
+            loadPreview()
+        }
+    }
+
+    // MARK: - Preview Section
+
+    @ViewBuilder
+    private var previewSection: some View {
+        VStack(spacing: AISSpacing.sm) {
+            if isImage {
+                // Image preview
+                if let image = previewImage {
+                    #if os(macOS)
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 300)
+                        .cornerRadius(AISRadius.md)
+                        .shadow(radius: 2)
+                    #else
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 300)
+                        .cornerRadius(AISRadius.md)
+                        .shadow(radius: 2)
+                    #endif
+                } else if let error = loadError {
+                    // Error loading image
+                    VStack(spacing: AISSpacing.sm) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 40))
+                            .foregroundColor(tokens.stateWarning.color)
+                        Text("Failed to load preview")
+                            .font(.subheadline)
+                            .foregroundColor(tokens.onSurfaceSecondary)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(tokens.onSurfaceSecondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 150)
+                    .background(tokens.surface)
+                    .cornerRadius(AISRadius.md)
+                } else {
+                    // Loading state
+                    VStack(spacing: AISSpacing.sm) {
+                        ProgressView()
+                        Text("Loading preview...")
+                            .font(.caption)
+                            .foregroundColor(tokens.onSurfaceSecondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 150)
+                    .background(tokens.surface)
+                    .cornerRadius(AISRadius.md)
+                }
+            } else {
+                // Non-image file icon preview
+                VStack(spacing: AISSpacing.sm) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: AISRadius.lg)
+                            .fill(tokens.actionPrimary.color.opacity(0.15))
+                            .frame(width: 100, height: 100)
+
+                        Image(systemName: fileIcon)
+                            .font(.system(size: 48))
+                            .foregroundColor(tokens.actionPrimary.color)
+                    }
+
+                    Text(file.fileName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(tokens.onSurface)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, minHeight: 150)
+                .padding(AISSpacing.md)
+            }
+        }
+    }
+
+    // MARK: - Preview Loading
+
+    private func loadPreview() {
+        guard isImage else { return }
+
+        // Load image from file path
+        let url = URL(fileURLWithPath: file.localPath)
+
+        // Start accessing security-scoped resource if needed
+        let didStartAccess = url.startAccessingSecurityScopedResource()
+
+        #if os(macOS)
+        if let image = NSImage(contentsOf: url) {
+            previewImage = image
+        } else {
+            loadError = "Unable to load image from path"
+        }
+        #else
+        if let image = UIImage(contentsOfFile: file.localPath) {
+            previewImage = image
+        } else {
+            loadError = "Unable to load image from path"
+        }
+        #endif
+
+        if didStartAccess {
+            url.stopAccessingSecurityScopedResource()
+        }
     }
 
     @ViewBuilder
@@ -794,6 +1606,377 @@ public struct AISFileInfoDetailView: View {
                 .textSelection(.enabled)
         }
         .padding(.vertical, AISSpacing.xs)
+    }
+}
+
+// MARK: - Platform Image Type Alias
+
+#if os(macOS)
+typealias AISImageType = NSImage
+#else
+typealias AISImageType = UIImage
+#endif
+
+// MARK: - Media Picker With Review
+
+/// A media picker with built-in review functionality.
+/// Shows selected files in a review panel before final confirmation.
+///
+/// ## Features
+/// - Built-in review panel showing all selected files
+/// - Image preview for image files
+/// - File metadata display
+/// - Remove individual files before confirmation
+/// - Clear all / Confirm buttons
+///
+/// ## Example
+/// ```swift
+/// AISMediaPickerWithReview(
+///     allowedTypes: [.image, .pdf],
+///     allowsMultiple: true,
+///     onConfirm: { files in
+///         viewModel.uploadFiles(files)
+///     },
+///     onCancel: {
+///         dismiss()
+///     }
+/// )
+/// ```
+///
+public struct AISMediaPickerWithReview: View {
+    // MARK: - Properties
+
+    let allowedTypes: [AISFileCategory]
+    let allowsMultiple: Bool
+    let maxFileSize: Int64?
+    let showSourceSelector: Bool
+    let onConfirm: ([AISFileInfo]) -> Void
+    let onCancel: (() -> Void)?
+
+    // MARK: - Environment
+
+    @Environment(\.aisTokens) private var tokens
+
+    // MARK: - State
+
+    @State private var pickerState: AISFilePickerState = .idle
+    @State private var selectedFiles: [AISFileInfo] = []
+    @State private var showingReview = false
+    @State private var selectedFileForPreview: AISFileInfo?
+
+    // MARK: - Initialization
+
+    public init(
+        allowedTypes: [AISFileCategory] = [.any],
+        allowsMultiple: Bool = true,
+        maxFileSize: Int64? = nil,
+        showSourceSelector: Bool = true,
+        onConfirm: @escaping ([AISFileInfo]) -> Void,
+        onCancel: (() -> Void)? = nil
+    ) {
+        self.allowedTypes = allowedTypes
+        self.allowsMultiple = allowsMultiple
+        self.maxFileSize = maxFileSize
+        self.showSourceSelector = showSourceSelector
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+    }
+
+    // MARK: - Body
+
+    public var body: some View {
+        VStack(spacing: AISSpacing.lg) {
+            // Header with count
+            if !selectedFiles.isEmpty {
+                reviewHeader
+            }
+
+            // File picker
+            AISMediaPicker(
+                state: $pickerState,
+                allowedTypes: allowedTypes,
+                allowsMultiple: allowsMultiple,
+                maxFileSize: maxFileSize,
+                buttonLabel: selectedFiles.isEmpty ? "Select Files" : "Add More Files",
+                buttonType: selectedFiles.isEmpty ? .primary : .neutral,
+                showSourceSelector: showSourceSelector,
+                onFilesSelected: { files in
+                    withAnimation {
+                        selectedFiles.append(contentsOf: files)
+                        showingReview = true
+                    }
+                }
+            )
+
+            // Review panel
+            if showingReview && !selectedFiles.isEmpty {
+                reviewPanel
+            }
+
+            // Action buttons
+            if !selectedFiles.isEmpty {
+                actionButtons
+            }
+        }
+        .sheet(item: $selectedFileForPreview) { file in
+            filePreviewSheet(file)
+        }
+    }
+
+    // MARK: - Review Header
+
+    private var reviewHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Selected Files")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color(tokens.onSurface))
+
+                Text("\(selectedFiles.count) file(s) ready for review")
+                    .font(.caption)
+                    .foregroundColor(Color(tokens.onSurfaceSecondary))
+            }
+
+            Spacer()
+
+            // Toggle review panel
+            Button {
+                withAnimation {
+                    showingReview.toggle()
+                }
+            } label: {
+                Image(systemName: showingReview ? "chevron.up" : "chevron.down")
+                    .foregroundColor(Color(tokens.onSurfaceSecondary))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(AISSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: AISRadius.md)
+                .fill(Color(tokens.surfaceSecondary))
+        )
+    }
+
+    // MARK: - Review Panel
+
+    private var reviewPanel: some View {
+        VStack(spacing: AISSpacing.sm) {
+            ForEach(selectedFiles) { file in
+                reviewFileRow(file)
+            }
+        }
+        .padding(AISSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: AISRadius.lg)
+                .fill(Color(tokens.surfaceSecondary))
+        )
+    }
+
+    private func reviewFileRow(_ file: AISFileInfo) -> some View {
+        HStack(spacing: AISSpacing.md) {
+            // Thumbnail or icon
+            filePreviewThumbnail(file)
+                .frame(width: 50, height: 50)
+                .cornerRadius(AISRadius.sm)
+                .onTapGesture {
+                    selectedFileForPreview = file
+                }
+
+            // File info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(file.fileName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(Color(tokens.onSurface))
+                    .lineLimit(1)
+
+                HStack(spacing: AISSpacing.xs) {
+                    Text(ByteCountFormatter.string(fromByteCount: file.fileSize, countStyle: .file))
+                        .font(.caption)
+                        .foregroundColor(Color(tokens.onSurfaceSecondary))
+
+                    Text("•")
+                        .font(.caption)
+                        .foregroundColor(Color(tokens.onSurfaceSecondary))
+
+                    Text(file.mimeType)
+                        .font(.caption)
+                        .foregroundColor(Color(tokens.onSurfaceSecondary))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            // Preview button
+            Button {
+                selectedFileForPreview = file
+            } label: {
+                Image(systemName: "eye")
+                    .font(.caption)
+                    .foregroundColor(Color(tokens.actionPrimary.color))
+            }
+            .buttonStyle(.plain)
+
+            // Remove button
+            Button {
+                withAnimation {
+                    selectedFiles.removeAll { $0.id == file.id }
+                    if selectedFiles.isEmpty {
+                        showingReview = false
+                    }
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(Color(tokens.stateError.color).opacity(0.7))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(AISSpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: AISRadius.sm)
+                .fill(Color(tokens.surface))
+        )
+    }
+
+    @ViewBuilder
+    private func filePreviewThumbnail(_ file: AISFileInfo) -> some View {
+        if file.mimeType.hasPrefix("image/") {
+            // Show image thumbnail
+            AsyncImageThumbnail(file: file)
+        } else {
+            // Show file type icon
+            ZStack {
+                RoundedRectangle(cornerRadius: AISRadius.sm)
+                    .fill(Color(tokens.actionPrimary.color).opacity(0.1))
+
+                Image(systemName: iconForMimeType(file.mimeType))
+                    .font(.title3)
+                    .foregroundColor(Color(tokens.actionPrimary.color))
+            }
+        }
+    }
+
+    private func iconForMimeType(_ mimeType: String) -> String {
+        if mimeType.hasPrefix("image/") { return "photo" }
+        if mimeType.hasPrefix("video/") { return "video" }
+        if mimeType.hasPrefix("audio/") { return "music.note" }
+        if mimeType == "application/pdf" { return "doc.text" }
+        if mimeType.hasPrefix("text/") { return "doc.plaintext" }
+        return "doc"
+    }
+
+    // MARK: - Action Buttons
+
+    private var actionButtons: some View {
+        HStack(spacing: AISSpacing.md) {
+            // Clear all button
+            AISButton("Clear All", type: .destructive, style: .outlined) {
+                withAnimation {
+                    selectedFiles.removeAll()
+                    showingReview = false
+                }
+            }
+
+            Spacer()
+
+            // Cancel button (if provided)
+            if onCancel != nil {
+                AISButton("Cancel", type: .neutral) {
+                    onCancel?()
+                }
+            }
+
+            // Confirm button
+            AISButton("Confirm (\(selectedFiles.count))", type: .confirm, icon: "checkmark") {
+                onConfirm(selectedFiles)
+            }
+        }
+    }
+
+    // MARK: - Preview Sheet
+
+    private func filePreviewSheet(_ file: AISFileInfo) -> some View {
+        NavigationStack {
+            ScrollView {
+                AISFileInfoDetailView(file: file)
+                    .padding(AISSpacing.lg)
+            }
+            .background(Color(tokens.surface))
+            .navigationTitle("File Preview")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        selectedFileForPreview = nil
+                    }
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 500, minHeight: 600)
+        #endif
+    }
+}
+
+// MARK: - Async Image Thumbnail
+
+/// Loads and displays image thumbnail asynchronously
+private struct AsyncImageThumbnail: View {
+    let file: AISFileInfo
+
+    @State private var image: AISImageType?
+    @State private var isLoading = true
+
+    var body: some View {
+        ZStack {
+            if let image = image {
+                #if os(macOS)
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                #else
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                #endif
+            } else if isLoading {
+                ProgressView()
+                    .scaleEffect(0.5)
+            } else {
+                Image(systemName: "photo")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .clipped()
+        .onAppear {
+            loadImage()
+        }
+    }
+
+    private func loadImage() {
+        let url = URL(fileURLWithPath: file.localPath)
+        let didStartAccess = url.startAccessingSecurityScopedResource()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            #if os(macOS)
+            let loadedImage = NSImage(contentsOf: url)
+            #else
+            let loadedImage = UIImage(contentsOfFile: file.localPath)
+            #endif
+
+            DispatchQueue.main.async {
+                self.image = loadedImage
+                self.isLoading = false
+
+                if didStartAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+        }
     }
 }
 

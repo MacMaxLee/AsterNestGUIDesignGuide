@@ -25,6 +25,9 @@
 		A100001F232F0001 /* StateBadgeDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000020232F0001 /* StateBadgeDemoScreen.swift */; };
 		A1000021232F0002 /* AISGridLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022232F0002 /* AISGridLayout.swift */; };
 		A1000023232F0002 /* GridLayoutDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000024232F0002 /* GridLayoutDemoScreen.swift */; };
+		A1000025232F0003 /* DocScanDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000026232F0003 /* DocScanDemoScreen.swift */; };
+		A1000027232F0003 /* AISettingsDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000028232F0003 /* AISettingsDemoScreen.swift */; };
+		A1000029232F0003 /* ListDetailDemoScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100002A232F0003 /* ListDetailDemoScreen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +50,9 @@
 		A1000020232F0001 /* StateBadgeDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateBadgeDemoScreen.swift; sourceTree = "<group>"; };
 		A1000022232F0002 /* AISGridLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISGridLayout.swift; sourceTree = "<group>"; };
 		A1000024232F0002 /* GridLayoutDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridLayoutDemoScreen.swift; sourceTree = "<group>"; };
+		A1000026232F0003 /* DocScanDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocScanDemoScreen.swift; sourceTree = "<group>"; };
+		A1000028232F0003 /* AISettingsDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsDemoScreen.swift; sourceTree = "<group>"; };
+		A100002A232F0003 /* ListDetailDemoScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListDetailDemoScreen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -111,8 +117,11 @@
 				A100001A232F0001 /* DataGridDemoScreen.swift */,
 				A1000024232F0002 /* GridLayoutDemoScreen.swift */,
 				A100001C232F0001 /* MediaPickerDemoScreen.swift */,
+				A1000026232F0003 /* DocScanDemoScreen.swift */,
+				A1000028232F0003 /* AISettingsDemoScreen.swift */,
 				A100001E232F0001 /* ErrorHandlingDemoScreen.swift */,
 				A1000020232F0001 /* StateBadgeDemoScreen.swift */,
+				A100002A232F0003 /* ListDetailDemoScreen.swift */,
 			);
 			path = Screens;
 			sourceTree = "<group>";
@@ -219,6 +228,9 @@
 				A100001F232F0001 /* StateBadgeDemoScreen.swift in Sources */,
 				A1000021232F0002 /* AISGridLayout.swift in Sources */,
 				A1000023232F0002 /* GridLayoutDemoScreen.swift in Sources */,
+				A1000025232F0003 /* DocScanDemoScreen.swift in Sources */,
+				A1000027232F0003 /* AISettingsDemoScreen.swift in Sources */,
+				A1000029232F0003 /* ListDetailDemoScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

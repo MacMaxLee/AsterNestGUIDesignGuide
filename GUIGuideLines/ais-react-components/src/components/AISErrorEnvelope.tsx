@@ -20,7 +20,6 @@ import {
   AlertCircle,
   AlertOctagon,
   Loader2,
-  RotateCcw,
   X,
   Copy,
   Check,
